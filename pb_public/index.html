@@ -92,6 +92,15 @@
             <div class="form-group">
               <label>Coördinaten</label>
               <p class="form-hint">Optioneel. Gebruik GPS om je huidige locatie in te vullen.</p>
+              <div id="coords-permission" class="coords-permission hidden" role="status" aria-live="polite">
+                <div class="coords-permission-body">
+                  <p class="coords-permission-title">Locatietoegang</p>
+                  <p id="coords-permission-text" class="coords-permission-text"></p>
+                </div>
+                <button type="button" id="btn-request-location" class="btn btn-primary">
+                  Locatie toestaan
+                </button>
+              </div>
               <div class="coords-input-row">
                 <input
                   type="text"

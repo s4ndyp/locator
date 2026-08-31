@@ -19,6 +19,7 @@
     },
     editingLocationId: null,
     detailLocationId: null,
+    geolocationPermission: "unknown",
   };
 
   const views = {
@@ -40,6 +41,9 @@
     locationLatitude: document.getElementById("location-latitude"),
     locationLongitude: document.getElementById("location-longitude"),
     btnUseGps: document.getElementById("btn-use-gps"),
+    coordsPermission: document.getElementById("coords-permission"),
+    coordsPermissionText: document.getElementById("coords-permission-text"),
+    btnRequestLocation: document.getElementById("btn-request-location"),
     coordsError: document.getElementById("coords-error"),
     kenmerkInput: document.getElementById("kenmerk-input"),
     btnAddKenmerk: document.getElementById("btn-add-kenmerk"),
@@ -70,6 +74,7 @@
   };
 
   const isEditing = () => !!state.editingLocationId;
+  let geolocationPermissionListenerAttached = false;
 
   function showView(name) {
     state.view = name;
@@ -87,7 +92,10 @@
     if (name === "list") loadLocationList();
     if (name === "detail" && state.detailLocationId) loadLocationDetail(state.detailLocationId);
     if (name === "createStep2") updateCreateStep2Labels();
-    if (name === "createStep1") updateCreateStep1Labels();
+    if (name === "createStep1") {
+      updateCreateStep1Labels();
+      updateLocationPermissionUI();
+    }
   }
 
   function updateCreateStep1Labels() {
@@ -269,48 +277,150 @@
     return "https://www.google.com/maps?q=" + encodeURIComponent(lat + "," + lon);
   }
 
-  function useCurrentGpsLocation() {
+  function resetGpsButton(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    const label = btn.querySelector("span");
+    if (label) label.textContent = "GPS";
+  }
+
+  function setGpsButtonLoading(btn, loading) {
+    if (!btn) return;
+    btn.disabled = loading;
+    const label = btn.querySelector("span");
+    if (label) label.textContent = loading ? "..." : "GPS";
+  }
+
+  function applyGeolocationCoords(position) {
+    const coords = {
+      lat: position.coords.latitude,
+      lon: position.coords.longitude,
+    };
+    state.create.coordinates = coords;
+    setCoordinateInputs(coords);
+    els.coordsError.classList.add("hidden");
+    state.geolocationPermission = "granted";
+    updateLocationPermissionUI();
+    showToast("GPS-coördinaten toegevoegd", "success");
+  }
+
+  function geolocationErrorMessage(error) {
+    if (!error) return "Kon GPS-locatie niet ophalen";
+    if (error.code === error.PERMISSION_DENIED) {
+      state.geolocationPermission = "denied";
+      updateLocationPermissionUI();
+      return "Locatietoegang geweigerd. Gebruik de knop hierboven of zet locatie aan in je browserinstellingen.";
+    }
+    if (error.code === error.TIMEOUT) {
+      return "GPS-locatie ophalen duurde te lang. Probeer het opnieuw.";
+    }
+    if (error.code === error.POSITION_UNAVAILABLE) {
+      return "GPS-signaal niet beschikbaar. Controleer of locatie op je telefoon aan staat.";
+    }
+    return "Kon GPS-locatie niet ophalen";
+  }
+
+  function requestGpsLocation(triggerBtn) {
+    if (!window.isSecureContext) {
+      state.geolocationPermission = "insecure";
+      updateLocationPermissionUI();
+      showToast("Locatie werkt alleen via HTTPS. Open de site met https://", "error");
+      return;
+    }
+
     if (!navigator.geolocation) {
       showToast("GPS wordt niet ondersteund op dit apparaat", "error");
       return;
     }
 
-    const btn = els.btnUseGps;
-    const label = btn.querySelector("span");
-    const originalText = label ? label.textContent : "GPS";
-    btn.disabled = true;
-    if (label) label.textContent = "...";
+    setGpsButtonLoading(triggerBtn || els.btnUseGps, true);
+    if (els.btnRequestLocation) els.btnRequestLocation.disabled = true;
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const coords = {
-          lat: position.coords.latitude,
-          lon: position.coords.longitude,
-        };
-        state.create.coordinates = coords;
-        setCoordinateInputs(coords);
-        els.coordsError.classList.add("hidden");
-        showToast("GPS-coördinaten toegevoegd", "success");
-        btn.disabled = false;
-        if (label) label.textContent = originalText;
+        applyGeolocationCoords(position);
+        resetGpsButton(triggerBtn || els.btnUseGps);
+        if (els.btnRequestLocation) els.btnRequestLocation.disabled = false;
       },
       (error) => {
-        let message = "Kon GPS-locatie niet ophalen";
-        if (error.code === error.PERMISSION_DENIED) {
-          message = "Geef toegang tot je locatie om GPS te gebruiken";
-        } else if (error.code === error.TIMEOUT) {
-          message = "GPS-locatie ophalen duurde te lang";
-        }
-        showToast(message, "error");
-        btn.disabled = false;
-        if (label) label.textContent = originalText;
+        showToast(geolocationErrorMessage(error), "error");
+        resetGpsButton(triggerBtn || els.btnUseGps);
+        if (els.btnRequestLocation) els.btnRequestLocation.disabled = false;
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 20000,
         maximumAge: 0,
       }
     );
+  }
+
+  async function updateLocationPermissionUI() {
+    const panel = els.coordsPermission;
+    const text = els.coordsPermissionText;
+    const requestBtn = els.btnRequestLocation;
+    if (!panel || !text) return;
+
+    if (!window.isSecureContext) {
+      panel.classList.remove("hidden");
+      text.textContent =
+        "Je browser staat locatie alleen toe via een beveiligde verbinding (HTTPS). Open deze site met https:// in plaats van http://.";
+      if (requestBtn) requestBtn.classList.add("hidden");
+      if (els.btnUseGps) els.btnUseGps.disabled = true;
+      return;
+    }
+
+    if (els.btnUseGps) els.btnUseGps.disabled = false;
+
+    if (!navigator.geolocation) {
+      panel.classList.add("hidden");
+      return;
+    }
+
+    if (!navigator.permissions || !navigator.permissions.query) {
+      panel.classList.remove("hidden");
+      if (requestBtn) requestBtn.classList.remove("hidden");
+      text.textContent =
+        "Tik op Locatie toestaan. Je browser vraagt dan om toestemming om je GPS-coördinaten te gebruiken.";
+      return;
+    }
+
+    try {
+      const result = await navigator.permissions.query({ name: "geolocation" });
+      state.geolocationPermission = result.state;
+
+      if (!geolocationPermissionListenerAttached) {
+        result.onchange = () => updateLocationPermissionUI();
+        geolocationPermissionListenerAttached = true;
+      }
+
+      if (result.state === "granted") {
+        panel.classList.add("hidden");
+        return;
+      }
+
+      panel.classList.remove("hidden");
+
+      if (result.state === "prompt") {
+        if (requestBtn) requestBtn.classList.remove("hidden");
+        text.textContent =
+          "Tik op Locatie toestaan. Je browser toont dan een venster waarin je toegang tot je locatie kunt geven.";
+        return;
+      }
+
+      if (requestBtn) requestBtn.classList.add("hidden");
+      text.textContent =
+        "Locatietoegang is geblokkeerd voor deze website. Open de instellingen van je browser, zoek deze site en zet locatie op Toestaan. Vernieuw daarna de pagina.";
+    } catch (err) {
+      panel.classList.remove("hidden");
+      if (requestBtn) requestBtn.classList.remove("hidden");
+      text.textContent =
+        "Tik op Locatie toestaan. Je browser vraagt dan om toestemming om je GPS-coördinaten te gebruiken.";
+    }
+  }
+
+  function useCurrentGpsLocation() {
+    requestGpsLocation(els.btnUseGps);
   }
 
   const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
@@ -1001,6 +1111,7 @@
   });
 
   els.btnUseGps.addEventListener("click", useCurrentGpsLocation);
+  els.btnRequestLocation.addEventListener("click", () => requestGpsLocation(els.btnRequestLocation));
 
   els.formLocationInfo.addEventListener("submit", (e) => {
     e.preventDefault();

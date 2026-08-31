@@ -338,6 +338,34 @@ body {
   color: var(--text-muted);
 }
 
+.coords-permission {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.coords-permission-title {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.coords-permission-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.coords-permission .btn {
+  align-self: stretch;
+}
+
 .coords-input-row {
   display: flex;
   gap: 8px;
