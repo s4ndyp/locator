@@ -64,14 +64,14 @@
     detail: "Locatie",
   };
 
+  const isEditing = () => !!state.editingLocationId;
+
   function showView(name) {
     state.view = name;
     Object.values(views).forEach((v) => v.classList.remove("active"));
     const key =
       name === "createStep1" || name === "createStep2" ? name : name;
     if (views[key]) views[key].classList.add("active");
-
-  const isEditing = () => !!state.editingLocationId;
 
     els.pageTitle.textContent =
       (isEditing() && (name === "createStep1" ? titles.editStep1 : name === "createStep2" ? titles.editStep2 : null)) ||
@@ -156,9 +156,85 @@
     }, 3200);
   }
 
-  function fileUrl(record, field, thumb) {
+  function apiErrorMessage(err, fallback) {
+    if (!err) return fallback;
+    const data = err.response && err.response.data;
+    if (data && typeof data === "object") {
+      const parts = Object.entries(data).map(([field, info]) => {
+        if (info && typeof info === "object" && info.message) {
+          return field + ": " + info.message;
+        }
+        return field + ": " + String(info);
+      });
+      if (parts.length) return parts.join("; ");
+    }
+    return err.message || fallback;
+  }
+
+  function fileFieldName(record, field) {
     if (!record || !record[field]) return "";
-  return pb.files.getURL(record, field, thumb ? { thumb } : undefined);
+    const value = record[field];
+    if (Array.isArray(value)) return value[0] || "";
+    return String(value);
+  }
+
+  function fileUrl(record, field, thumb) {
+    const filename = fileFieldName(record, field);
+    if (!filename || !record.id) return "";
+    return pb.files.getURL(record, filename, thumb ? { thumb } : undefined);
+  }
+
+  function relationId(value) {
+    if (!value) return "";
+    return typeof value === "string" ? value : value.id || "";
+  }
+
+  const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
+  const IMAGE_MIME_BY_EXT = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    heic: "image/heic",
+    heif: "image/heif",
+  };
+
+  function fileExtension(name) {
+    const parts = (name || "").toLowerCase().split(".");
+    return parts.length > 1 ? parts.pop() : "";
+  }
+
+  function isImageFile(file) {
+    if (!file) return false;
+    if (file.type && file.type.startsWith("image/")) return true;
+    return IMAGE_EXTENSIONS.includes(fileExtension(file.name));
+  }
+
+  function normalizeImageFile(file) {
+    if (!isImageFile(file)) return null;
+
+    const ext = fileExtension(file.name);
+    const mime = file.type || IMAGE_MIME_BY_EXT[ext];
+    if (!mime) return null;
+
+    const name = file.name || "foto." + (ext || "jpg");
+    if (file.type === mime) return file;
+
+    return new File([file], name, { type: mime, lastModified: file.lastModified });
+  }
+
+  function uniqueId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return "id-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+  }
+
+  function findKenmerkSection(kenmerkName) {
+    return els.kenmerkPhotoSections.querySelector(
+      ".kenmerk-section[data-kenmerk-key=\"" + CSS.escape(kenmerkName) + "\"]"
+    );
   }
 
   /* Kenmerken chips (step 1) */
@@ -221,13 +297,22 @@
     state.create.kenmerken.forEach((kenmerkName) => {
       const section = document.createElement("div");
       section.className = "kenmerk-section";
-      section.dataset.kenmerk = kenmerkName;
+      section.dataset.kenmerkKey = kenmerkName;
 
       const header = document.createElement("div");
       header.className = "kenmerk-section-header";
-      header.innerHTML =
-        "<span class=\"kenmerk-section-title\">" + escapeHtml(kenmerkName) + "</span>" +
-        "<span class=\"kenmerk-section-count\" data-count-for=\"" + escapeHtml(kenmerkName) + "\">0 foto's</span>";
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "kenmerk-section-title";
+      titleSpan.textContent = kenmerkName;
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "kenmerk-section-count";
+      countSpan.dataset.countFor = kenmerkName;
+      countSpan.textContent = "0 foto's";
+
+      header.appendChild(titleSpan);
+      header.appendChild(countSpan);
 
       const uploadZone = document.createElement("div");
       uploadZone.className = "upload-zone";
@@ -242,15 +327,19 @@
 
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = "image/*";
+      input.accept = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
       input.multiple = true;
+      input.className = "upload-input";
       uploadZone.appendChild(input);
 
       const grid = document.createElement("div");
       grid.className = "photo-grid";
       grid.dataset.gridFor = kenmerkName;
 
-      uploadZone.addEventListener("click", () => input.click());
+      input.addEventListener("change", () => {
+        handleFiles(kenmerkName, input.files);
+        input.value = "";
+      });
       uploadZone.addEventListener("dragover", (e) => {
         e.preventDefault();
         uploadZone.classList.add("dragover");
@@ -260,10 +349,6 @@
         e.preventDefault();
         uploadZone.classList.remove("dragover");
         handleFiles(kenmerkName, e.dataTransfer.files);
-      });
-      input.addEventListener("change", () => {
-        handleFiles(kenmerkName, input.files);
-        input.value = "";
       });
 
       section.appendChild(header);
@@ -276,13 +361,34 @@
   }
 
   function handleFiles(kenmerkName, fileList) {
-    const files = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
-    if (!files.length) return;
+    const incoming = Array.from(fileList || []);
+    const files = [];
+    let skipped = 0;
+
+    incoming.forEach((raw) => {
+      const file = normalizeImageFile(raw);
+      if (file) {
+        files.push(file);
+      } else {
+        skipped++;
+      }
+    });
+
+    if (!files.length) {
+      if (incoming.length) {
+        showToast("Geen geldige afbeeldingen geselecteerd (PNG, JPG, WebP, GIF)", "error");
+      }
+      return;
+    }
+
+    if (skipped) {
+      showToast(skipped + " bestand(en) overgeslagen (geen geldige afbeelding)", "error");
+    }
 
     if (!state.create.photos[kenmerkName]) state.create.photos[kenmerkName] = [];
 
     files.forEach((file) => {
-      const id = crypto.randomUUID();
+      const id = uniqueId();
       const preview = URL.createObjectURL(file);
       state.create.photos[kenmerkName].push({ id, file, preview });
     });
@@ -291,12 +397,13 @@
   }
 
   function renderPhotoGrid(kenmerkName) {
-    const grid = els.kenmerkPhotoSections.querySelector(
-      "[data-grid-for=\"" + CSS.escape(kenmerkName) + "\"]"
-    );
-    const countEl = els.kenmerkPhotoSections.querySelector(
-      "[data-count-for=\"" + CSS.escape(kenmerkName) + "\"]"
-    );
+    const section = findKenmerkSection(kenmerkName);
+    const grid = section
+      ? section.querySelector("[data-grid-for=\"" + CSS.escape(kenmerkName) + "\"]")
+      : null;
+    const countEl = section
+      ? section.querySelector("[data-count-for=\"" + CSS.escape(kenmerkName) + "\"]")
+      : null;
     const photos = state.create.photos[kenmerkName] || [];
 
     if (countEl) {
@@ -363,11 +470,11 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          const formData = new FormData();
-          formData.append("image", photo.file);
-          formData.append("kenmerk", kenmerk.id);
-          formData.append("location", location.id);
-          await pb.collection("photos").create(formData);
+          await pb.collection("photos").create({
+            image: photo.file,
+            kenmerk: kenmerk.id,
+            location: location.id,
+          });
           uploadCount++;
         }
       }
@@ -382,7 +489,7 @@
       showView("detail");
     } catch (err) {
       console.error(err);
-      showToast("Opslaan mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Opslaan mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     } finally {
       btn.disabled = false;
       updateCreateStep2Labels();
@@ -435,11 +542,11 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          const formData = new FormData();
-          formData.append("image", photo.file);
-          formData.append("kenmerk", kenmerk.id);
-          formData.append("location", locationId);
-          await pb.collection("photos").create(formData);
+          await pb.collection("photos").create({
+            image: photo.file,
+            kenmerk: kenmerk.id,
+            location: locationId,
+          });
           uploadCount++;
         }
       }
@@ -454,7 +561,7 @@
       showView("detail");
     } catch (err) {
       console.error(err);
-      showToast("Opslaan mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Opslaan mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     } finally {
       btn.disabled = false;
       updateCreateStep2Labels();
@@ -466,7 +573,7 @@
       const location = await pb.collection("locations").getOne(locationId);
       const kenmerken = await pb.collection("kenmerken").getFullList({
         filter: "location = \"" + locationId + "\"",
-        sort: "sort_order,created",
+        sort: "sort_order",
       });
       const photos = await pb.collection("photos").getFullList({
         filter: "location = \"" + locationId + "\"",
@@ -479,7 +586,7 @@
       kenmerken.forEach((k) => {
         state.create.kenmerkIds[k.name] = k.id;
         state.create.photos[k.name] = photos
-          .filter((p) => p.kenmerk === k.id)
+          .filter((p) => relationId(p.kenmerk) === k.id)
           .map((p) => ({
             id: p.id,
             recordId: p.id,
@@ -492,7 +599,7 @@
       showView("createStep1");
     } catch (err) {
       console.error(err);
-      showToast("Laden mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     }
   }
 
@@ -512,7 +619,7 @@
 
     try {
       const locations = await pb.collection("locations").getFullList({
-        sort: "-created",
+        sort: "-id",
       });
 
       els.listLoading.classList.add("hidden");
@@ -559,7 +666,7 @@
     } catch (err) {
       console.error(err);
       els.listLoading.classList.add("hidden");
-      showToast("Laden mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     }
   }
 
@@ -573,7 +680,7 @@
       const location = await pb.collection("locations").getOne(locationId);
       const kenmerken = await pb.collection("kenmerken").getFullList({
         filter: "location = \"" + locationId + "\"",
-        sort: "sort_order,created",
+        sort: "sort_order",
       });
       const photos = await pb.collection("photos").getFullList({
         filter: "location = \"" + locationId + "\"",
@@ -616,7 +723,9 @@
       }
 
       kenmerken.forEach((kenmerk) => {
-        const kenmerkPhotos = photos.filter((p) => p.kenmerk === kenmerk.id);
+        const kenmerkPhotos = photos.filter(
+          (p) => relationId(p.kenmerk) === kenmerk.id
+        );
 
         const block = document.createElement("div");
         block.className = "detail-kenmerk";
@@ -629,12 +738,22 @@
           grid.className = "detail-photo-grid";
 
           kenmerkPhotos.forEach((photo) => {
-            const url = fileUrl(photo, "image", "400x400");
+            const thumbUrl = fileUrl(photo, "image", "100x100");
             const fullUrl = fileUrl(photo, "image");
             const item = document.createElement("div");
             item.className = "detail-photo";
-            item.innerHTML = "<img src=\"" + url + "\" alt=\"\" loading=\"lazy\" />";
-            item.addEventListener("click", () => openLightbox(fullUrl, kenmerk.name));
+            const img = document.createElement("img");
+            img.alt = kenmerk.name;
+            img.loading = "lazy";
+            img.src = thumbUrl || fullUrl;
+            if (thumbUrl && fullUrl && thumbUrl !== fullUrl) {
+              img.addEventListener("error", function onThumbError() {
+                img.removeEventListener("error", onThumbError);
+                img.src = fullUrl;
+              });
+            }
+            item.appendChild(img);
+            item.addEventListener("click", () => openLightbox(fullUrl || thumbUrl, kenmerk.name));
             grid.appendChild(item);
           });
 
@@ -655,7 +774,7 @@
     } catch (err) {
       console.error(err);
       els.detailLoading.classList.add("hidden");
-      showToast("Laden mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
       showView("list");
     }
   }
@@ -672,7 +791,7 @@
       showView("list");
     } catch (err) {
       console.error(err);
-      showToast("Verwijderen mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Verwijderen mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     }
   }
 
