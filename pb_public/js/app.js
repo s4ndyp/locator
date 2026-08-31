@@ -10,6 +10,7 @@
     view: "home",
     create: {
       name: "",
+      coordinates: null,
       kenmerken: [],
       photos: {},
       kenmerkIds: {},
@@ -36,6 +37,10 @@
     btnEmptyNew: document.getElementById("btn-empty-new"),
     formLocationInfo: document.getElementById("form-location-info"),
     locationName: document.getElementById("location-name"),
+    locationLatitude: document.getElementById("location-latitude"),
+    locationLongitude: document.getElementById("location-longitude"),
+    btnUseGps: document.getElementById("btn-use-gps"),
+    coordsError: document.getElementById("coords-error"),
     kenmerkInput: document.getElementById("kenmerk-input"),
     btnAddKenmerk: document.getElementById("btn-add-kenmerk"),
     kenmerkList: document.getElementById("kenmerk-list"),
@@ -130,6 +135,7 @@
   function resetCreate() {
     state.create = {
       name: "",
+      coordinates: null,
       kenmerken: [],
       photos: {},
       kenmerkIds: {},
@@ -138,9 +144,11 @@
     };
     state.editingLocationId = null;
     els.locationName.value = "";
+    setCoordinateInputs(null);
     els.kenmerkInput.value = "";
     els.kenmerkList.innerHTML = "";
     els.kenmerkError.classList.add("hidden");
+    els.coordsError.classList.add("hidden");
     els.kenmerkPhotoSections.innerHTML = "";
     updateCreateStep1Labels();
     updateCreateStep2Labels();
@@ -187,6 +195,122 @@
   function relationId(value) {
     if (!value) return "";
     return typeof value === "string" ? value : value.id || "";
+  }
+
+  function formatCoordinate(value) {
+    if (value === null || value === undefined || value === "") return "";
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "";
+    return num.toFixed(6);
+  }
+
+  function parseCoordinateInput(value) {
+    const trimmed = String(value || "").trim().replace(",", ".");
+    if (!trimmed) return null;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : NaN;
+  }
+
+  function readCoordinatesFromForm() {
+    return {
+      lat: parseCoordinateInput(els.locationLatitude.value),
+      lon: parseCoordinateInput(els.locationLongitude.value),
+    };
+  }
+
+  function setCoordinateInputs(coordinates) {
+    const lat = coordinates && coordinates.lat !== undefined ? coordinates.lat : null;
+    const lon = coordinates && coordinates.lon !== undefined ? coordinates.lon : null;
+    els.locationLatitude.value = formatCoordinate(lat);
+    els.locationLongitude.value = formatCoordinate(lon);
+  }
+
+  function validateCoordinates(lat, lon) {
+    const hasLat = lat !== null;
+    const hasLon = lon !== null;
+
+    if (!hasLat && !hasLon) return null;
+    if (hasLat !== hasLon) {
+      return "Vul zowel breedtegraad als lengtegraad in, of laat beide leeg.";
+    }
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
+      return "Breedtegraad moet tussen -90 en 90 liggen.";
+    }
+    if (Number.isNaN(lon) || lon < -180 || lon > 180) {
+      return "Lengtegraad moet tussen -180 en 180 liggen.";
+    }
+    return null;
+  }
+
+  function coordinatesFromRecord(record) {
+    if (!record || !record.coordinates) return null;
+    const lat = Number(record.coordinates.lat);
+    const lon = Number(record.coordinates.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return { lat, lon };
+  }
+
+  function buildLocationPayload() {
+    const payload = { name: state.create.name };
+    const coords = state.create.coordinates;
+    payload.coordinates = coords ? { lat: coords.lat, lon: coords.lon } : null;
+    return payload;
+  }
+
+  function syncCoordinatesFromForm() {
+    const { lat, lon } = readCoordinatesFromForm();
+    const error = validateCoordinates(lat, lon);
+    if (error) return error;
+    state.create.coordinates = lat !== null && lon !== null ? { lat, lon } : null;
+    return null;
+  }
+
+  function mapsUrl(lat, lon) {
+    return "https://www.google.com/maps?q=" + encodeURIComponent(lat + "," + lon);
+  }
+
+  function useCurrentGpsLocation() {
+    if (!navigator.geolocation) {
+      showToast("GPS wordt niet ondersteund op dit apparaat", "error");
+      return;
+    }
+
+    const btn = els.btnUseGps;
+    const label = btn.querySelector("span");
+    const originalText = label ? label.textContent : "GPS";
+    btn.disabled = true;
+    if (label) label.textContent = "...";
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+        };
+        state.create.coordinates = coords;
+        setCoordinateInputs(coords);
+        els.coordsError.classList.add("hidden");
+        showToast("GPS-coördinaten toegevoegd", "success");
+        btn.disabled = false;
+        if (label) label.textContent = originalText;
+      },
+      (error) => {
+        let message = "Kon GPS-locatie niet ophalen";
+        if (error.code === error.PERMISSION_DENIED) {
+          message = "Geef toegang tot je locatie om GPS te gebruiken";
+        } else if (error.code === error.TIMEOUT) {
+          message = "GPS-locatie ophalen duurde te lang";
+        }
+        showToast(message, "error");
+        btn.disabled = false;
+        if (label) label.textContent = originalText;
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
   }
 
   const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
@@ -488,9 +612,7 @@
     btn.textContent = "Opslaan...";
 
     try {
-      const location = await pb.collection("locations").create({
-        name: state.create.name,
-      });
+      const location = await pb.collection("locations").create(buildLocationPayload());
 
       const kenmerkRecords = [];
       for (let i = 0; i < state.create.kenmerken.length; i++) {
@@ -541,9 +663,7 @@
     btn.textContent = "Opslaan...";
 
     try {
-      await pb.collection("locations").update(locationId, {
-        name: state.create.name,
-      });
+      await pb.collection("locations").update(locationId, buildLocationPayload());
 
       const uniqueRemovedKenmerkIds = [...new Set(state.create.removedKenmerkIds)];
       for (const id of uniqueRemovedKenmerkIds) {
@@ -620,6 +740,7 @@
       resetCreate();
       state.editingLocationId = locationId;
       state.create.name = location.name;
+      state.create.coordinates = coordinatesFromRecord(location);
       state.create.kenmerken = kenmerken.map((k) => k.name);
       kenmerken.forEach((k) => {
         state.create.kenmerkIds[k.name] = k.id;
@@ -633,6 +754,7 @@
       });
 
       els.locationName.value = location.name;
+      setCoordinateInputs(state.create.coordinates);
       renderKenmerkChips();
       showView("createStep1");
     } catch (err) {
@@ -726,10 +848,22 @@
 
       els.pageTitle.textContent = location.name;
 
+      const coords = coordinatesFromRecord(location);
+      let coordsHtml = "";
+      if (coords) {
+        const coordsLabel = formatCoordinate(coords.lat) + ", " + formatCoordinate(coords.lon);
+        coordsHtml =
+          "<p class=\"detail-coordinates\">" +
+          "<a href=\"" + escapeHtml(mapsUrl(coords.lat, coords.lon)) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
+          escapeHtml(coordsLabel) +
+          "</a></p>";
+      }
+
       const header = document.createElement("div");
       header.className = "detail-header";
       header.innerHTML =
         "<h2>" + escapeHtml(location.name) + "</h2>" +
+        coordsHtml +
         "<p class=\"detail-meta\">" +
         kenmerken.length + " kenmerk" + (kenmerken.length !== 1 ? "en" : "") +
         " · " + photos.length + " foto" + (photos.length !== 1 ? "'s" : "") +
@@ -866,6 +1000,8 @@
     }
   });
 
+  els.btnUseGps.addEventListener("click", useCurrentGpsLocation);
+
   els.formLocationInfo.addEventListener("submit", (e) => {
     e.preventDefault();
     const name = els.locationName.value.trim();
@@ -873,6 +1009,13 @@
       els.locationName.focus();
       return;
     }
+    const coordError = syncCoordinatesFromForm();
+    if (coordError) {
+      els.coordsError.textContent = coordError;
+      els.coordsError.classList.remove("hidden");
+      return;
+    }
+    els.coordsError.classList.add("hidden");
     if (state.create.kenmerken.length === 0) {
       els.kenmerkError.classList.remove("hidden");
       return;
