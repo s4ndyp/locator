@@ -190,6 +190,8 @@
   }
 
   const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
+  const FILE_ACCEPT =
+    "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
   const IMAGE_MIME_BY_EXT = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
@@ -235,6 +237,23 @@
     return els.kenmerkPhotoSections.querySelector(
       ".kenmerk-section[data-kenmerk-key=\"" + CSS.escape(kenmerkName) + "\"]"
     );
+  }
+
+  function createPhotoFileInput(options) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.className = "upload-input";
+    input.accept = options.capture ? "image/*" : FILE_ACCEPT;
+    if (options.capture) input.setAttribute("capture", options.capture);
+    if (options.multiple) input.multiple = true;
+    return input;
+  }
+
+  function bindPhotoFileInput(input, kenmerkName) {
+    input.addEventListener("change", () => {
+      handleFiles(kenmerkName, input.files);
+      input.value = "";
+    });
   }
 
   /* Kenmerken chips (step 1) */
@@ -316,30 +335,49 @@
 
       const uploadZone = document.createElement("div");
       uploadZone.className = "upload-zone";
-      uploadZone.innerHTML =
+
+      const actions = document.createElement("div");
+      actions.className = "upload-actions";
+
+      const cameraAction = document.createElement("label");
+      cameraAction.className = "upload-action upload-action-camera";
+      cameraAction.innerHTML =
+        "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\">" +
+        "<path d=\"M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z\"/>" +
+        "<circle cx=\"12\" cy=\"13\" r=\"4\"/>" +
+        "</svg>" +
+        "<span>Foto maken</span>";
+      const cameraInput = createPhotoFileInput({ capture: "environment" });
+      cameraAction.appendChild(cameraInput);
+      bindPhotoFileInput(cameraInput, kenmerkName);
+
+      const galleryAction = document.createElement("label");
+      galleryAction.className = "upload-action upload-action-gallery";
+      galleryAction.innerHTML =
         "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\">" +
         "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"/>" +
         "<circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"/>" +
         "<polyline points=\"21 15 16 10 5 21\"/>" +
         "</svg>" +
-        "<p>Foto's toevoegen</p>" +
-        "<span>Tik of sleep bestanden hier</span>";
+        "<span>Uit galerij</span>";
+      const galleryInput = createPhotoFileInput({ multiple: true });
+      galleryAction.appendChild(galleryInput);
+      bindPhotoFileInput(galleryInput, kenmerkName);
 
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
-      input.multiple = true;
-      input.className = "upload-input";
-      uploadZone.appendChild(input);
+      actions.appendChild(cameraAction);
+      actions.appendChild(galleryAction);
+
+      const hint = document.createElement("span");
+      hint.className = "upload-hint";
+      hint.textContent = "of sleep bestanden hier";
+
+      uploadZone.appendChild(actions);
+      uploadZone.appendChild(hint);
 
       const grid = document.createElement("div");
       grid.className = "photo-grid";
       grid.dataset.gridFor = kenmerkName;
 
-      input.addEventListener("change", () => {
-        handleFiles(kenmerkName, input.files);
-        input.value = "";
-      });
       uploadZone.addEventListener("dragover", (e) => {
         e.preventDefault();
         uploadZone.classList.add("dragover");

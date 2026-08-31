@@ -442,12 +442,11 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px 16px;
+  gap: 12px;
+  padding: 20px 16px;
   border: 2px dashed var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
-  cursor: pointer;
   transition: border-color var(--transition), background var(--transition);
   text-align: center;
 }
@@ -458,24 +457,62 @@ body {
   background: var(--accent-muted);
 }
 
-.upload-zone svg {
-  width: 32px;
-  height: 32px;
-  color: var(--text-muted);
+.upload-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
 }
 
-.upload-zone p {
-  margin: 0;
-  font-size: 0.875rem;
+.upload-action {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.upload-action:hover,
+.upload-action:focus-within {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.upload-action svg {
+  width: 28px;
+  height: 28px;
   color: var(--text-secondary);
+  pointer-events: none;
 }
 
-.upload-zone span {
+.upload-action span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.upload-action:focus-within span,
+.upload-action:hover span {
+  color: var(--text-primary);
+}
+
+.upload-hint {
   font-size: 0.75rem;
   color: var(--text-muted);
+  pointer-events: none;
 }
 
-.upload-zone input.upload-input {
+.upload-zone input.upload-input,
+.upload-action input.upload-input {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -483,14 +520,6 @@ body {
   opacity: 0;
   cursor: pointer;
   z-index: 2;
-}
-
-.upload-zone svg,
-.upload-zone p,
-.upload-zone span {
-  position: relative;
-  z-index: 1;
-  pointer-events: none;
 }
 
 .photo-grid {
