@@ -90,6 +90,38 @@
             </div>
 
             <div class="form-group">
+              <label>Coördinaten</label>
+              <p class="form-hint">Optioneel. Gebruik GPS om je huidige locatie in te vullen.</p>
+              <div class="coords-input-row">
+                <input
+                  type="text"
+                  id="location-latitude"
+                  placeholder="Breedtegraad"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  aria-label="Breedtegraad"
+                />
+                <input
+                  type="text"
+                  id="location-longitude"
+                  placeholder="Lengtegraad"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  aria-label="Lengtegraad"
+                />
+                <button type="button" id="btn-use-gps" class="btn btn-secondary btn-gps" title="Gebruik GPS-locatie">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+                    <circle cx="12" cy="12" r="8" />
+                  </svg>
+                  <span>GPS</span>
+                </button>
+              </div>
+              <p id="coords-error" class="form-error hidden"></p>
+            </div>
+
+            <div class="form-group">
               <label>Kenmerken</label>
               <p class="form-hint">Voeg kenmerken toe waarvoor je foto's wilt groeperen.</p>
               <div class="kenmerk-input-row">

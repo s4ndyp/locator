@@ -338,6 +338,64 @@ body {
   color: var(--text-muted);
 }
 
+.coords-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.coords-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.coords-input-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.coords-input-row input::placeholder {
+  color: var(--text-muted);
+}
+
+.btn-gps {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  min-width: 72px;
+}
+
+.btn-gps svg {
+  width: 18px;
+  height: 18px;
+}
+
+.detail-coordinates {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+}
+
+.detail-coordinates a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.detail-coordinates a:hover {
+  text-decoration: underline;
+}
+
 .kenmerk-input-row {
   display: flex;
   gap: 8px;
