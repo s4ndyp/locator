@@ -425,6 +425,14 @@ body {
   border: 0;
 }
 
+.detail-map-compact iframe {
+  height: 160px;
+}
+
+.detail-kenmerk .detail-map {
+  margin: 0 0 12px;
+}
+
 .detail-coordinates {
   margin: 0;
   padding: 10px 12px;
