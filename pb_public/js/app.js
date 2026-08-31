@@ -111,9 +111,29 @@
     }, 3200);
   }
 
+  function apiErrorMessage(err, fallback) {
+    if (!err) return fallback;
+    const data = err.response && err.response.data;
+    if (data && typeof data === "object") {
+      const parts = Object.entries(data).map(([field, info]) => {
+        if (info && typeof info === "object" && info.message) {
+          return field + ": " + info.message;
+        }
+        return field + ": " + String(info);
+      });
+      if (parts.length) return parts.join("; ");
+    }
+    return err.message || fallback;
+  }
+
   function fileUrl(record, field, thumb) {
     if (!record || !record[field]) return "";
-  return pb.files.getURL(record, field, thumb ? { thumb } : undefined);
+    return pb.files.getURL(record, field, thumb ? { thumb } : undefined);
+  }
+
+  function relationId(value) {
+    if (!value) return "";
+    return typeof value === "string" ? value : value.id || "";
   }
 
   /* Kenmerken chips (step 1) */
@@ -317,7 +337,7 @@
       showView("detail");
     } catch (err) {
       console.error(err);
-      showToast("Opslaan mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Opslaan mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     } finally {
       btn.disabled = false;
       btn.textContent = "Locatie opslaan";
@@ -338,7 +358,7 @@
 
     try {
       const locations = await pb.collection("locations").getFullList({
-        sort: "-created",
+        sort: "-id",
       });
 
       els.listLoading.classList.add("hidden");
@@ -385,7 +405,7 @@
     } catch (err) {
       console.error(err);
       els.listLoading.classList.add("hidden");
-      showToast("Laden mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     }
   }
 
@@ -399,7 +419,7 @@
       const location = await pb.collection("locations").getOne(locationId);
       const kenmerken = await pb.collection("kenmerken").getFullList({
         filter: "location = \"" + locationId + "\"",
-        sort: "sort_order,created",
+        sort: "sort_order",
       });
       const photos = await pb.collection("photos").getFullList({
         filter: "location = \"" + locationId + "\"",
@@ -436,7 +456,9 @@
       }
 
       kenmerken.forEach((kenmerk) => {
-        const kenmerkPhotos = photos.filter((p) => p.kenmerk === kenmerk.id);
+        const kenmerkPhotos = photos.filter(
+          (p) => relationId(p.kenmerk) === kenmerk.id
+        );
 
         const block = document.createElement("div");
         block.className = "detail-kenmerk";
@@ -475,7 +497,7 @@
     } catch (err) {
       console.error(err);
       els.detailLoading.classList.add("hidden");
-      showToast("Laden mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
       showView("list");
     }
   }
@@ -492,7 +514,7 @@
       showView("list");
     } catch (err) {
       console.error(err);
-      showToast("Verwijderen mislukt: " + (err.message || "onbekende fout"), "error");
+      showToast("Verwijderen mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     }
   }
 
