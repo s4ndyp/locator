@@ -136,6 +136,54 @@
     return typeof value === "string" ? value : value.id || "";
   }
 
+  const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
+  const IMAGE_MIME_BY_EXT = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    heic: "image/heic",
+    heif: "image/heif",
+  };
+
+  function fileExtension(name) {
+    const parts = (name || "").toLowerCase().split(".");
+    return parts.length > 1 ? parts.pop() : "";
+  }
+
+  function isImageFile(file) {
+    if (!file) return false;
+    if (file.type && file.type.startsWith("image/")) return true;
+    return IMAGE_EXTENSIONS.includes(fileExtension(file.name));
+  }
+
+  function normalizeImageFile(file) {
+    if (!isImageFile(file)) return null;
+
+    const ext = fileExtension(file.name);
+    const mime = file.type || IMAGE_MIME_BY_EXT[ext];
+    if (!mime) return null;
+
+    const name = file.name || "foto." + (ext || "jpg");
+    if (file.type === mime) return file;
+
+    return new File([file], name, { type: mime, lastModified: file.lastModified });
+  }
+
+  function uniqueId() {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return "id-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+  }
+
+  function findKenmerkSection(kenmerkName) {
+    return els.kenmerkPhotoSections.querySelector(
+      ".kenmerk-section[data-kenmerk-key=\"" + CSS.escape(kenmerkName) + "\"]"
+    );
+  }
+
   /* Kenmerken chips (step 1) */
   function renderKenmerkChips() {
     els.kenmerkList.innerHTML = "";
@@ -184,13 +232,22 @@
     state.create.kenmerken.forEach((kenmerkName) => {
       const section = document.createElement("div");
       section.className = "kenmerk-section";
-      section.dataset.kenmerk = kenmerkName;
+      section.dataset.kenmerkKey = kenmerkName;
 
       const header = document.createElement("div");
       header.className = "kenmerk-section-header";
-      header.innerHTML =
-        "<span class=\"kenmerk-section-title\">" + escapeHtml(kenmerkName) + "</span>" +
-        "<span class=\"kenmerk-section-count\" data-count-for=\"" + escapeHtml(kenmerkName) + "\">0 foto's</span>";
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "kenmerk-section-title";
+      titleSpan.textContent = kenmerkName;
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "kenmerk-section-count";
+      countSpan.dataset.countFor = kenmerkName;
+      countSpan.textContent = "0 foto's";
+
+      header.appendChild(titleSpan);
+      header.appendChild(countSpan);
 
       const uploadZone = document.createElement("div");
       uploadZone.className = "upload-zone";
@@ -205,15 +262,19 @@
 
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = "image/*";
+      input.accept = "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
       input.multiple = true;
+      input.className = "upload-input";
       uploadZone.appendChild(input);
 
       const grid = document.createElement("div");
       grid.className = "photo-grid";
       grid.dataset.gridFor = kenmerkName;
 
-      uploadZone.addEventListener("click", () => input.click());
+      input.addEventListener("change", () => {
+        handleFiles(kenmerkName, input.files);
+        input.value = "";
+      });
       uploadZone.addEventListener("dragover", (e) => {
         e.preventDefault();
         uploadZone.classList.add("dragover");
@@ -223,10 +284,6 @@
         e.preventDefault();
         uploadZone.classList.remove("dragover");
         handleFiles(kenmerkName, e.dataTransfer.files);
-      });
-      input.addEventListener("change", () => {
-        handleFiles(kenmerkName, input.files);
-        input.value = "";
       });
 
       section.appendChild(header);
@@ -239,13 +296,34 @@
   }
 
   function handleFiles(kenmerkName, fileList) {
-    const files = Array.from(fileList).filter((f) => f.type.startsWith("image/"));
-    if (!files.length) return;
+    const incoming = Array.from(fileList || []);
+    const files = [];
+    let skipped = 0;
+
+    incoming.forEach((raw) => {
+      const file = normalizeImageFile(raw);
+      if (file) {
+        files.push(file);
+      } else {
+        skipped++;
+      }
+    });
+
+    if (!files.length) {
+      if (incoming.length) {
+        showToast("Geen geldige afbeeldingen geselecteerd (PNG, JPG, WebP, GIF)", "error");
+      }
+      return;
+    }
+
+    if (skipped) {
+      showToast(skipped + " bestand(en) overgeslagen (geen geldige afbeelding)", "error");
+    }
 
     if (!state.create.photos[kenmerkName]) state.create.photos[kenmerkName] = [];
 
     files.forEach((file) => {
-      const id = crypto.randomUUID();
+      const id = uniqueId();
       const preview = URL.createObjectURL(file);
       state.create.photos[kenmerkName].push({ id, file, preview });
     });
@@ -254,12 +332,13 @@
   }
 
   function renderPhotoGrid(kenmerkName) {
-    const grid = els.kenmerkPhotoSections.querySelector(
-      "[data-grid-for=\"" + CSS.escape(kenmerkName) + "\"]"
-    );
-    const countEl = els.kenmerkPhotoSections.querySelector(
-      "[data-count-for=\"" + CSS.escape(kenmerkName) + "\"]"
-    );
+    const section = findKenmerkSection(kenmerkName);
+    const grid = section
+      ? section.querySelector("[data-grid-for=\"" + CSS.escape(kenmerkName) + "\"]")
+      : null;
+    const countEl = section
+      ? section.querySelector("[data-count-for=\"" + CSS.escape(kenmerkName) + "\"]")
+      : null;
     const photos = state.create.photos[kenmerkName] || [];
 
     if (countEl) {
@@ -318,11 +397,11 @@
       for (const kenmerk of kenmerkRecords) {
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
-          const formData = new FormData();
-          formData.append("image", photo.file);
-          formData.append("kenmerk", kenmerk.id);
-          formData.append("location", location.id);
-          await pb.collection("photos").create(formData);
+          await pb.collection("photos").create({
+            image: photo.file,
+            kenmerk: kenmerk.id,
+            location: location.id,
+          });
           uploadCount++;
         }
       }
