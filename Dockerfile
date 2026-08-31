@@ -26,4 +26,4 @@ EXPOSE 8090
 
 VOLUME ["/pb/pb_data"]
 
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir", "/pb/pb_data", "--publicDir", "/pb/pb_public", "--migrationsDir", "/pb/pb_migrations"]
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080", "--dir", "/pb/pb_data", "--publicDir", "/pb/pb_public", "--migrationsDir", "/pb/pb_migrations"]
