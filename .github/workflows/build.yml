@@ -1,0 +1,63 @@
+name: Docker CI/CD voor API Gateway
+
+on:
+  push:
+    # De workflow start nu bij een push naar zowel 'main' als 'beta'
+    branches:
+      - main
+      - beta
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    # Voeg rechten toe om naar de GitHub Container Registry te schrijven
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+    - name: ⬇️ Checkout Code
+      uses: actions/checkout@v4
+      
+    # ----------------------------------------------------
+    # NIEUWE STAP: Bepaal dynamisch de image tag
+    # ----------------------------------------------------
+    - name: 🏷️ Stel dynamische image tag in
+      id: set_tag
+      run: |
+        BRANCH_NAME="${{ github.ref_name }}"
+        # De basis van de GHCR-image URL
+        IMAGE_BASE_NAME="ghcr.io/${{ github.repository }}"
+        
+        # Logica om de tag te bepalen
+        if [ "$BRANCH_NAME" == "main" ]; then
+          # Main branch krijgt de 'latest' tag
+          TAG_VALUE="$IMAGE_BASE_NAME:latest"
+        else
+          # Andere branches (zoals 'beta') krijgen de branch-naam als tag
+          TAG_VALUE="$IMAGE_BASE_NAME:$BRANCH_NAME"
+        fi
+        
+        # Maak de volledige tag-waarde beschikbaar voor de volgende stappen
+        echo "full_tag=$TAG_VALUE" >> $GITHUB_OUTPUT
+        echo "Geselecteerde tag: $TAG_VALUE"
+
+    - name: ⚙️ Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🔐 Log in op GitHub Container Registry (GHCR)
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🏗️ Bouw en Push Docker image naar GHCR
+      uses: docker/build-push-action@v5
+      with:
+        context: . # Zoek naar Dockerfile in de root van de repository
+        push: true # Zorg ervoor dat de image na het bouwen wordt geüpload.
+        # ----------------------------------------------------
+        # Gebruik de dynamisch bepaalde tag uit de vorige stap
+        # ----------------------------------------------------
+        tags: ${{ steps.set_tag.outputs.full_tag }}
