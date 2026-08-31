@@ -322,12 +322,32 @@
     return wrapper;
   }
 
-  async function extractGpsFromPhoto(photo) {
+  async function extractGpsFromFile(file) {
+    if (!file || typeof exifr === "undefined") return null;
+    try {
+      const gps = await exifr.gps(file);
+      const lat = gps && Number(gps.latitude);
+      const lon = gps && Number(gps.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return { lat, lon };
+    } catch (err) {
+      console.warn("EXIF GPS niet gelezen uit bestand", err);
+      return null;
+    }
+  }
+
+  async function extractGpsFromStoredPhoto(photo) {
     if (!photo || !photo.id) return null;
     if (exifGpsCache.has(photo.id)) return exifGpsCache.get(photo.id);
 
+    const stored = coordinatesFromRecord(photo);
+    if (stored) {
+      exifGpsCache.set(photo.id, stored);
+      return stored;
+    }
+
     const imageUrl = fileUrl(photo, "image");
-    if (!imageUrl || typeof exifr === "undefined") {
+    if (!imageUrl) {
       exifGpsCache.set(photo.id, null);
       return null;
     }
@@ -335,12 +355,7 @@
     try {
       const response = await fetch(imageUrl);
       if (!response.ok) throw new Error("fetch failed");
-      const blob = await response.blob();
-      const gps = await exifr.gps(blob);
-      const lat = gps && Number(gps.latitude);
-      const lon = gps && Number(gps.longitude);
-      const coords =
-        Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+      const coords = await extractGpsFromFile(await response.blob());
       exifGpsCache.set(photo.id, coords);
       return coords;
     } catch (err) {
@@ -348,6 +363,72 @@
       exifGpsCache.set(photo.id, null);
       return null;
     }
+  }
+
+  async function resolvePhotoGps(photo) {
+    if (!photo) return null;
+    if (photo.gps) return photo.gps;
+
+    const stored = coordinatesFromRecord(photo);
+    if (stored) return stored;
+
+    if (photo.file) return extractGpsFromFile(photo.file);
+
+    if (photo.recordId || photo.id) {
+      return extractGpsFromStoredPhoto({
+        id: photo.recordId || photo.id,
+        coordinates: photo.coordinates,
+        image: photo.image,
+      });
+    }
+
+    return null;
+  }
+
+  async function findFirstPhotoGps(photoList) {
+    for (const photo of photoList) {
+      const gps = await resolvePhotoGps(photo);
+      if (gps) return gps;
+    }
+    return null;
+  }
+
+  function markPhotoGpsIndicator(container, hasGps) {
+    container.classList.toggle("photo-has-gps", hasGps);
+    let badge = container.querySelector(".photo-gps-badge");
+    if (hasGps) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "photo-gps-badge";
+        badge.setAttribute("aria-label", "Locatie beschikbaar");
+        badge.innerHTML =
+          "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">" +
+          "<path d=\"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z\"/>" +
+          "<circle cx=\"12\" cy=\"10\" r=\"3\"/>" +
+          "</svg>";
+        container.appendChild(badge);
+      }
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  async function applyPhotoGpsIndicator(container, photo) {
+    const gps = await resolvePhotoGps(photo);
+    markPhotoGpsIndicator(container, !!gps);
+    return gps;
+  }
+
+  function buildPhotoCreatePayload(photo, kenmerkId, locationId) {
+    const payload = {
+      image: photo.file,
+      kenmerk: kenmerkId,
+      location: locationId,
+    };
+    if (photo.gps) {
+      payload.coordinates = { lat: photo.gps.lat, lon: photo.gps.lon };
+    }
+    return payload;
   }
 
   function sortPhotosByCreated(photoList) {
@@ -570,8 +651,6 @@
       input.value = "";
     });
   }
-
-  /* Kenmerken chips (step 1) */
   function renderKenmerkChips() {
     els.kenmerkList.innerHTML = "";
     state.create.kenmerken.forEach((name, index) => {
@@ -739,13 +818,24 @@
 
     if (!state.create.photos[kenmerkName]) state.create.photos[kenmerkName] = [];
 
-    files.forEach((file) => {
-      const id = uniqueId();
-      const preview = URL.createObjectURL(file);
-      state.create.photos[kenmerkName].push({ id, file, preview });
+    Promise.all(
+      files.map(async (file) => {
+        const id = uniqueId();
+        const preview = URL.createObjectURL(file);
+        const gps = await extractGpsFromFile(file);
+        return { id, file, preview, gps };
+      })
+    ).then((newPhotos) => {
+      state.create.photos[kenmerkName].push(...newPhotos);
+      renderPhotoGrid(kenmerkName);
+      const withGps = newPhotos.filter((photo) => photo.gps).length;
+      if (withGps) {
+        showToast(
+          withGps + " foto" + (withGps !== 1 ? "'s" : "") + " met locatiegegevens toegevoegd",
+          "success"
+        );
+      }
     });
-
-    renderPhotoGrid(kenmerkName);
   }
 
   function renderPhotoGrid(kenmerkName) {
@@ -787,6 +877,12 @@
         }
       });
 
+      if (photo.gps) {
+        markPhotoGpsIndicator(thumb, true);
+      } else {
+        applyPhotoGpsIndicator(thumb, photo);
+      }
+
       grid.appendChild(thumb);
     });
   }
@@ -820,11 +916,9 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          await pb.collection("photos").create({
-            image: photo.file,
-            kenmerk: kenmerk.id,
-            location: location.id,
-          });
+          await pb.collection("photos").create(
+            buildPhotoCreatePayload(photo, kenmerk.id, location.id)
+          );
           uploadCount++;
         }
       }
@@ -890,11 +984,9 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          await pb.collection("photos").create({
-            image: photo.file,
-            kenmerk: kenmerk.id,
-            location: locationId,
-          });
+          await pb.collection("photos").create(
+            buildPhotoCreatePayload(photo, kenmerk.id, locationId)
+          );
           uploadCount++;
         }
       }
@@ -940,6 +1032,9 @@
             id: p.id,
             recordId: p.id,
             preview: fileUrl(p, "image", "400x400"),
+            gps: coordinatesFromRecord(p),
+            coordinates: p.coordinates,
+            image: p.image,
           }));
       });
 
@@ -1090,7 +1185,7 @@
           " <span>" + kenmerkPhotos.length + "</span></h3>";
 
         if (kenmerkPhotos.length > 0) {
-          const photoGps = await extractGpsFromPhoto(kenmerkPhotos[0]);
+          const photoGps = await findFirstPhotoGps(kenmerkPhotos);
           if (photoGps) {
             block.appendChild(
               buildDetailMap(photoGps, {
@@ -1121,6 +1216,7 @@
             }
             item.appendChild(img);
             item.addEventListener("click", () => openLightbox(fullUrl || thumbUrl, kenmerk.name));
+            applyPhotoGpsIndicator(item, photo);
             grid.appendChild(item);
           });
 
