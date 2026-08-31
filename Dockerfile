@@ -17,10 +17,13 @@ RUN apk add --no-cache ca-certificates tzdata unzip wget \
     && rm /tmp/pb.zip \
     && apk del wget unzip
 
+COPY ./pb_public /pb/pb_public
+COPY ./pb_migrations /pb/pb_migrations
+
 WORKDIR /pb
 
 EXPOSE 8090
 
-VOLUME ["/pb/pb_data", "/pb/pb_public", "/pb/pb_migrations"]
+VOLUME ["/pb/pb_data"]
 
 CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir", "/pb/pb_data", "--publicDir", "/pb/pb_public", "--migrationsDir", "/pb/pb_migrations"]
