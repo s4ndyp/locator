@@ -1,6 +1,10 @@
 services:
   pocketbase:
-    image: ghcr.io/pocketbase/pocketbase:0.25.4
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PB_VERSION: "0.40.1"
     restart: unless-stopped
     ports:
       - "8090:8090"
@@ -8,4 +12,3 @@ services:
       - ./pb_data:/pb/pb_data
       - ./pb_public:/pb/pb_public
       - ./pb_migrations:/pb/pb_migrations
-    command: serve --http=0.0.0.0:8090 --dir /pb/pb_data --publicDir /pb/pb_public --migrationsDir /pb/pb_migrations
