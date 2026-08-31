@@ -1,29 +1,24 @@
-FROM alpine:3.21
+FROM alpine:latest
 
 ARG PB_VERSION=0.40.1
-ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates tzdata unzip wget \
-    && case "${TARGETARCH}" in \
-        amd64) ARCH=amd64 ;; \
-        arm64) ARCH=arm64 ;; \
-        arm) ARCH=armv7 ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac \
-    && wget -q -O /tmp/pb.zip \
-        "https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_${ARCH}.zip" \
-    && unzip /tmp/pb.zip -d /pb \
-    && chmod +x /pb/pocketbase \
+RUN apk add --no-cache \
+    ca-certificates \
+    unzip \
+    wget \
+    zip
+
+ADD https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip /tmp/pb.zip
+RUN unzip /tmp/pb.zip -d /pb/ \
     && rm /tmp/pb.zip \
-    && apk del wget unzip
+    && chmod +x /pb/pocketbase
 
 COPY ./pb_public /pb/pb_public
 COPY ./pb_migrations /pb/pb_migrations
 
 WORKDIR /pb
-
-EXPOSE 8090
-
 VOLUME ["/pb/pb_data"]
 
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080", "--dir", "/pb/pb_data", "--publicDir", "/pb/pb_public", "--migrationsDir", "/pb/pb_migrations"]
+EXPOSE 8080
+
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080"]
