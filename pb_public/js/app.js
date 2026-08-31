@@ -5,6 +5,7 @@
   "use strict";
 
   const pb = new PocketBase(window.location.origin);
+  const exifGpsCache = new Map();
 
   const state = {
     view: "home",
@@ -293,13 +294,17 @@
     );
   }
 
-  function buildDetailMap(coords) {
+  function buildDetailMap(coords, options) {
+    const opts = options || {};
+    const compact = !!opts.compact;
+    const linkSuffix = opts.linkSuffix || " · Open in Google Maps";
+
     const wrapper = document.createElement("div");
-    wrapper.className = "detail-map";
+    wrapper.className = "detail-map" + (compact ? " detail-map-compact" : "");
 
     const iframe = document.createElement("iframe");
     iframe.src = osmEmbedUrl(coords.lat, coords.lon);
-    iframe.title = "Kaart van locatie";
+    iframe.title = opts.title || "Kaart van locatie";
     iframe.loading = "lazy";
     iframe.referrerPolicy = "no-referrer-when-downgrade";
     iframe.setAttribute("allowfullscreen", "");
@@ -310,11 +315,43 @@
     link.className = "detail-coordinates";
     link.innerHTML =
       "<a href=\"" + escapeHtml(mapsUrl(coords.lat, coords.lon)) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
-      escapeHtml(coordsLabel) + " · Open in Google Maps" +
+      escapeHtml(coordsLabel + linkSuffix) +
       "</a>";
     wrapper.appendChild(link);
 
     return wrapper;
+  }
+
+  async function extractGpsFromPhoto(photo) {
+    if (!photo || !photo.id) return null;
+    if (exifGpsCache.has(photo.id)) return exifGpsCache.get(photo.id);
+
+    const imageUrl = fileUrl(photo, "image");
+    if (!imageUrl || typeof exifr === "undefined") {
+      exifGpsCache.set(photo.id, null);
+      return null;
+    }
+
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error("fetch failed");
+      const blob = await response.blob();
+      const gps = await exifr.gps(blob);
+      const lat = gps && Number(gps.latitude);
+      const lon = gps && Number(gps.longitude);
+      const coords =
+        Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+      exifGpsCache.set(photo.id, coords);
+      return coords;
+    } catch (err) {
+      console.warn("EXIF GPS niet beschikbaar voor foto", photo.id, err);
+      exifGpsCache.set(photo.id, null);
+      return null;
+    }
+  }
+
+  function sortPhotosByCreated(photoList) {
+    return photoList.slice().sort((a, b) => String(a.created).localeCompare(String(b.created)));
   }
 
   function resetGpsButton(btn) {
@@ -1038,9 +1075,9 @@
         els.detailContent.appendChild(empty);
       }
 
-      kenmerken.forEach((kenmerk) => {
-        const kenmerkPhotos = photos.filter(
-          (p) => relationId(p.kenmerk) === kenmerk.id
+      for (const kenmerk of kenmerken) {
+        const kenmerkPhotos = sortPhotosByCreated(
+          photos.filter((p) => relationId(p.kenmerk) === kenmerk.id)
         );
 
         const block = document.createElement("div");
@@ -1050,6 +1087,17 @@
           " <span>" + kenmerkPhotos.length + "</span></h3>";
 
         if (kenmerkPhotos.length > 0) {
+          const photoGps = await extractGpsFromPhoto(kenmerkPhotos[0]);
+          if (photoGps) {
+            block.appendChild(
+              buildDetailMap(photoGps, {
+                compact: true,
+                title: "Kaart van fotolocatie voor " + kenmerk.name,
+                linkSuffix: " · Fotolocatie · Open in Google Maps",
+              })
+            );
+          }
+
           const grid = document.createElement("div");
           grid.className = "detail-photo-grid";
 
@@ -1082,7 +1130,7 @@
         }
 
         els.detailContent.appendChild(block);
-      });
+      }
 
       els.detailContent.appendChild(actions);
       els.detailLoading.classList.add("hidden");
