@@ -12,7 +12,11 @@
       name: "",
       kenmerken: [],
       photos: {},
+      kenmerkIds: {},
+      removedKenmerkIds: [],
+      removedPhotoIds: [],
     },
+    editingLocationId: null,
     detailLocationId: null,
   };
 
@@ -54,9 +58,13 @@
     home: "Locatie Foto's",
     createStep1: "Nieuwe locatie",
     createStep2: "Foto's toevoegen",
+    editStep1: "Locatie bewerken",
+    editStep2: "Foto's bewerken",
     list: "Locatielijst",
     detail: "Locatie",
   };
+
+  const isEditing = () => !!state.editingLocationId;
 
   function showView(name) {
     state.view = name;
@@ -65,18 +73,45 @@
       name === "createStep1" || name === "createStep2" ? name : name;
     if (views[key]) views[key].classList.add("active");
 
-    els.pageTitle.textContent = titles[name] || "Locatie Foto's";
+    els.pageTitle.textContent =
+      (isEditing() && (name === "createStep1" ? titles.editStep1 : name === "createStep2" ? titles.editStep2 : null)) ||
+      titles[name] ||
+      "Locatie Foto's";
     els.btnBack.classList.toggle("hidden", name === "home");
 
     if (name === "list") loadLocationList();
     if (name === "detail" && state.detailLocationId) loadLocationDetail(state.detailLocationId);
+    if (name === "createStep2") updateCreateStep2Labels();
+    if (name === "createStep1") updateCreateStep1Labels();
+  }
+
+  function updateCreateStep1Labels() {
+    const submitBtn = els.formLocationInfo.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.textContent = isEditing()
+        ? "Volgende: foto's bewerken"
+        : "Volgende: foto's toevoegen";
+    }
+  }
+
+  function updateCreateStep2Labels() {
+    els.btnSaveLocation.textContent = isEditing() ? "Wijzigingen opslaan" : "Locatie opslaan";
+    els.btnCancelCreate.textContent = isEditing() ? "Annuleren" : "Annuleren";
   }
 
   function goBack() {
     switch (state.view) {
       case "createStep1":
-        resetCreate();
-        showView("home");
+        if (isEditing()) {
+          const locationId = state.editingLocationId;
+          photosCleanup();
+          resetCreate();
+          state.detailLocationId = locationId;
+          showView("detail");
+        } else {
+          resetCreate();
+          showView("home");
+        }
         break;
       case "createStep2":
         showView("createStep1");
@@ -93,12 +128,22 @@
   }
 
   function resetCreate() {
-    state.create = { name: "", kenmerken: [], photos: {} };
+    state.create = {
+      name: "",
+      kenmerken: [],
+      photos: {},
+      kenmerkIds: {},
+      removedKenmerkIds: [],
+      removedPhotoIds: [],
+    };
+    state.editingLocationId = null;
     els.locationName.value = "";
     els.kenmerkInput.value = "";
     els.kenmerkList.innerHTML = "";
     els.kenmerkError.classList.add("hidden");
     els.kenmerkPhotoSections.innerHTML = "";
+    updateCreateStep1Labels();
+    updateCreateStep2Labels();
   }
 
   function showToast(message, type = "info") {
@@ -203,6 +248,18 @@
         "<button type=\"button\" aria-label=\"Verwijderen\" data-index=\"" + index + "\">×</button>";
       li.querySelector("button").addEventListener("click", () => {
         const removed = state.create.kenmerken[index];
+        const existingId = state.create.kenmerkIds[removed];
+        if (existingId) {
+          state.create.removedKenmerkIds.push(existingId);
+          delete state.create.kenmerkIds[removed];
+        } else {
+          (state.create.photos[removed] || []).forEach((photo) => {
+            if (photo.recordId) state.create.removedPhotoIds.push(photo.recordId);
+          });
+        }
+        (state.create.photos[removed] || []).forEach((photo) => {
+          if (photo.preview && photo.file) URL.revokeObjectURL(photo.preview);
+        });
         state.create.kenmerken.splice(index, 1);
         delete state.create.photos[removed];
         renderKenmerkChips();
@@ -370,7 +427,9 @@
         e.stopPropagation();
         const idx = state.create.photos[kenmerkName].findIndex((p) => p.id === photo.id);
         if (idx >= 0) {
-          URL.revokeObjectURL(state.create.photos[kenmerkName][idx].preview);
+          const removed = state.create.photos[kenmerkName][idx];
+          if (removed.recordId) state.create.removedPhotoIds.push(removed.recordId);
+          if (removed.preview && removed.file) URL.revokeObjectURL(removed.preview);
           state.create.photos[kenmerkName].splice(idx, 1);
           renderPhotoGrid(kenmerkName);
         }
@@ -381,6 +440,11 @@
   }
 
   async function saveLocation() {
+    if (isEditing()) {
+      await updateLocation();
+      return;
+    }
+
     const btn = els.btnSaveLocation;
     btn.disabled = true;
     btn.textContent = "Opslaan...";
@@ -405,6 +469,7 @@
       for (const kenmerk of kenmerkRecords) {
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
+          if (!photo.file) continue;
           await pb.collection("photos").create({
             image: photo.file,
             kenmerk: kenmerk.id,
@@ -427,13 +492,122 @@
       showToast("Opslaan mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Locatie opslaan";
+      updateCreateStep2Labels();
+    }
+  }
+
+  async function updateLocation() {
+    const locationId = state.editingLocationId;
+    const btn = els.btnSaveLocation;
+    btn.disabled = true;
+    btn.textContent = "Opslaan...";
+
+    try {
+      await pb.collection("locations").update(locationId, {
+        name: state.create.name,
+      });
+
+      const uniqueRemovedKenmerkIds = [...new Set(state.create.removedKenmerkIds)];
+      for (const id of uniqueRemovedKenmerkIds) {
+        await pb.collection("kenmerken").delete(id);
+      }
+
+      const uniqueRemovedPhotoIds = [...new Set(state.create.removedPhotoIds)];
+      for (const id of uniqueRemovedPhotoIds) {
+        await pb.collection("photos").delete(id);
+      }
+
+      const kenmerkRecords = [];
+      for (let i = 0; i < state.create.kenmerken.length; i++) {
+        const name = state.create.kenmerken[i];
+        const existingId = state.create.kenmerkIds[name];
+        if (existingId) {
+          await pb.collection("kenmerken").update(existingId, {
+            name,
+            sort_order: i,
+          });
+          kenmerkRecords.push({ name, id: existingId });
+        } else {
+          const record = await pb.collection("kenmerken").create({
+            name,
+            location: locationId,
+            sort_order: i,
+          });
+          kenmerkRecords.push({ name, id: record.id });
+        }
+      }
+
+      let uploadCount = 0;
+      for (const kenmerk of kenmerkRecords) {
+        const photos = state.create.photos[kenmerk.name] || [];
+        for (const photo of photos) {
+          if (!photo.file) continue;
+          await pb.collection("photos").create({
+            image: photo.file,
+            kenmerk: kenmerk.id,
+            location: locationId,
+          });
+          uploadCount++;
+        }
+      }
+
+      photosCleanup();
+      resetCreate();
+      showToast(
+        "Locatie bijgewerkt" + (uploadCount ? " met " + uploadCount + " nieuwe foto's" : ""),
+        "success"
+      );
+      state.detailLocationId = locationId;
+      showView("detail");
+    } catch (err) {
+      console.error(err);
+      showToast("Opslaan mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
+    } finally {
+      btn.disabled = false;
+      updateCreateStep2Labels();
+    }
+  }
+
+  async function loadLocationForEdit(locationId) {
+    try {
+      const location = await pb.collection("locations").getOne(locationId);
+      const kenmerken = await pb.collection("kenmerken").getFullList({
+        filter: "location = \"" + locationId + "\"",
+        sort: "sort_order",
+      });
+      const photos = await pb.collection("photos").getFullList({
+        filter: "location = \"" + locationId + "\"",
+      });
+
+      resetCreate();
+      state.editingLocationId = locationId;
+      state.create.name = location.name;
+      state.create.kenmerken = kenmerken.map((k) => k.name);
+      kenmerken.forEach((k) => {
+        state.create.kenmerkIds[k.name] = k.id;
+        state.create.photos[k.name] = photos
+          .filter((p) => relationId(p.kenmerk) === k.id)
+          .map((p) => ({
+            id: p.id,
+            recordId: p.id,
+            preview: fileUrl(p, "image", "400x400"),
+          }));
+      });
+
+      els.locationName.value = location.name;
+      renderKenmerkChips();
+      showView("createStep1");
+    } catch (err) {
+      console.error(err);
+      showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
     }
   }
 
   function photosCleanup() {
     Object.values(state.create.photos).forEach((arr) => {
-      arr.forEach((p) => URL.revokeObjectURL(p.preview));
+      arr.forEach((p) => {
+        if (p.preview && p.file) URL.revokeObjectURL(p.preview);
+      });
     });
   }
 
@@ -525,11 +699,17 @@
 
       const actions = document.createElement("div");
       actions.className = "detail-actions";
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn btn-primary";
+      editBtn.textContent = "Bewerken";
+      editBtn.addEventListener("click", () => loadLocationForEdit(locationId));
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "btn btn-secondary";
       deleteBtn.textContent = "Locatie verwijderen";
       deleteBtn.addEventListener("click", () => deleteLocation(locationId, location.name));
+      actions.appendChild(editBtn);
       actions.appendChild(deleteBtn);
 
       els.detailContent.appendChild(header);
@@ -666,9 +846,17 @@
 
   els.btnSaveLocation.addEventListener("click", saveLocation);
   els.btnCancelCreate.addEventListener("click", () => {
-    photosCleanup();
-    resetCreate();
-    showView("home");
+    if (isEditing()) {
+      const locationId = state.editingLocationId;
+      photosCleanup();
+      resetCreate();
+      state.detailLocationId = locationId;
+      showView("detail");
+    } else {
+      photosCleanup();
+      resetCreate();
+      showView("home");
+    }
   });
 
   els.lightbox.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
