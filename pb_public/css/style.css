@@ -622,6 +622,8 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
   pointer-events: none;
+  line-height: 1.45;
+  max-width: 32rem;
 }
 
 .upload-zone input.upload-input,
