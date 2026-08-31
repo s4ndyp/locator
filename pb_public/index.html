@@ -1,1 +1,177 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d1117" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Locatie Foto's</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <button
+          type="button"
+          id="btn-back"
+          class="btn-icon btn-back hidden"
+          aria-label="Terug"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 class="app-title" id="page-title">Locatie Foto's</h1>
+      </header>
 
+      <main class="app-main">
+        <!-- Home -->
+        <section id="view-home" class="view active">
+          <div class="home-hero">
+            <div class="home-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+            </div>
+            <p class="home-subtitle">
+              Organiseer locatie foto's per kenmerk. Maak locaties aan, voeg kenmerken toe en
+              upload foto's per kenmerk.
+            </p>
+          </div>
+          <div class="home-actions">
+            <button type="button" id="btn-new-location" class="btn btn-primary btn-lg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nieuwe locatie aanmaken
+            </button>
+            <button type="button" id="btn-location-list" class="btn btn-secondary btn-lg">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+              Locatielijst
+            </button>
+          </div>
+        </section>
+
+        <!-- Step 1: naam + kenmerken -->
+        <section id="view-create-step1" class="view">
+          <div class="step-indicator">
+            <span class="step active">1</span>
+            <span class="step-line"></span>
+            <span class="step">2</span>
+          </div>
+          <p class="step-label">Locatie & kenmerken</p>
+
+          <form id="form-location-info" class="form">
+            <div class="form-group">
+              <label for="location-name">Locatienaam</label>
+              <input
+                type="text"
+                id="location-name"
+                placeholder="bijv. Hoofdkantoor Amsterdam"
+                required
+                maxlength="200"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Kenmerken</label>
+              <p class="form-hint">Voeg kenmerken toe waarvoor je foto's wilt groeperen.</p>
+              <div class="kenmerk-input-row">
+                <input
+                  type="text"
+                  id="kenmerk-input"
+                  placeholder="bijv. Entree, Parkeren, Gevel..."
+                  maxlength="200"
+                  autocomplete="off"
+                />
+                <button type="button" id="btn-add-kenmerk" class="btn btn-primary">Toevoegen</button>
+              </div>
+              <ul id="kenmerk-list" class="kenmerk-chips" aria-live="polite"></ul>
+              <p id="kenmerk-error" class="form-error hidden">Voeg minimaal één kenmerk toe.</p>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">Volgende: foto's toevoegen</button>
+          </form>
+        </section>
+
+        <!-- Step 2: foto's per kenmerk -->
+        <section id="view-create-step2" class="view">
+          <div class="step-indicator">
+            <span class="step done">1</span>
+            <span class="step-line active"></span>
+            <span class="step active">2</span>
+          </div>
+          <p class="step-label">Foto's per kenmerk</p>
+          <p class="location-preview-name" id="create-location-name"></p>
+
+          <div id="kenmerk-photo-sections" class="kenmerk-sections"></div>
+
+          <div class="form-actions">
+            <button type="button" id="btn-save-location" class="btn btn-primary btn-block">
+              Locatie opslaan
+            </button>
+            <button type="button" id="btn-cancel-create" class="btn btn-ghost btn-block">
+              Annuleren
+            </button>
+          </div>
+        </section>
+
+        <!-- Locatielijst -->
+        <section id="view-list" class="view">
+          <div id="location-list" class="location-list"></div>
+          <div id="list-empty" class="empty-state hidden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+            </svg>
+            <p>Nog geen locaties</p>
+            <button type="button" class="btn btn-primary" id="btn-empty-new">Eerste locatie aanmaken</button>
+          </div>
+          <div id="list-loading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Locaties laden...</p>
+          </div>
+        </section>
+
+        <!-- Locatie detail -->
+        <section id="view-detail" class="view">
+          <div id="detail-content" class="detail-content"></div>
+          <div id="detail-loading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Locatie laden...</p>
+          </div>
+        </section>
+      </main>
+
+      <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+      <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true" aria-label="Foto vergroten">
+        <button type="button" class="lightbox-close" aria-label="Sluiten">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+        <img id="lightbox-img" src="" alt="" />
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/pocketbase@0.25.4/dist/pocketbase.umd.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
