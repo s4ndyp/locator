@@ -437,6 +437,7 @@ body {
 }
 
 .upload-zone {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -474,8 +475,22 @@ body {
   color: var(--text-muted);
 }
 
-.upload-zone input {
-  display: none;
+.upload-zone input.upload-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.upload-zone svg,
+.upload-zone p,
+.upload-zone span {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
 }
 
 .photo-grid {
