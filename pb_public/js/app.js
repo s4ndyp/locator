@@ -503,6 +503,8 @@
   const IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif"];
   const FILE_ACCEPT =
     "image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
+  // Geen image/* — op Android opent dat vaak Google Foto's (zonder EXIF-locatie).
+  const LOCAL_PHOTO_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.heic,.heif";
   const IMAGE_MIME_BY_EXT = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
@@ -554,8 +556,14 @@
     const input = document.createElement("input");
     input.type = "file";
     input.className = "upload-input";
-    input.accept = options.capture ? "image/*" : FILE_ACCEPT;
-    if (options.capture) input.setAttribute("capture", options.capture);
+    if (options.capture) {
+      input.accept = "image/*";
+      input.setAttribute("capture", options.capture);
+    } else if (options.local) {
+      input.accept = LOCAL_PHOTO_ACCEPT;
+    } else {
+      input.accept = FILE_ACCEPT;
+    }
     if (options.multiple) input.multiple = true;
     return input;
   }
@@ -662,25 +670,26 @@
       cameraAction.appendChild(cameraInput);
       bindPhotoFileInput(cameraInput, kenmerkName);
 
-      const galleryAction = document.createElement("label");
-      galleryAction.className = "upload-action upload-action-gallery";
-      galleryAction.innerHTML =
+      const localAction = document.createElement("label");
+      localAction.className = "upload-action upload-action-local";
+      localAction.innerHTML =
         "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\">" +
         "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"/>" +
         "<circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"/>" +
         "<polyline points=\"21 15 16 10 5 21\"/>" +
         "</svg>" +
-        "<span>Uit galerij</span>";
-      const galleryInput = createPhotoFileInput({ multiple: true });
-      galleryAction.appendChild(galleryInput);
-      bindPhotoFileInput(galleryInput, kenmerkName);
+        "<span>Camera-album</span>";
+      const localInput = createPhotoFileInput({ local: true, multiple: true });
+      localAction.appendChild(localInput);
+      bindPhotoFileInput(localInput, kenmerkName);
 
       actions.appendChild(cameraAction);
-      actions.appendChild(galleryAction);
+      actions.appendChild(localAction);
 
       const hint = document.createElement("span");
       hint.className = "upload-hint";
-      hint.textContent = "of sleep bestanden hier";
+      hint.textContent =
+        "Gebruik Camera-album voor lokale foto's met locatie. Google Foto's verwijdert locatiegegevens.";
 
       uploadZone.appendChild(actions);
       uploadZone.appendChild(hint);
