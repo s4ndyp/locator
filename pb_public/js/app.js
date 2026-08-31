@@ -253,10 +253,16 @@
 
   function coordinatesFromRecord(record) {
     if (!record || !record.coordinates) return null;
-    const lat = Number(record.coordinates.lat);
-    const lon = Number(record.coordinates.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return { lat, lon };
+    return normalizeGpsCoords(record.coordinates.lat, record.coordinates.lon);
+  }
+
+  function normalizeGpsCoords(lat, lon) {
+    const latitude = Number(lat);
+    const longitude = Number(lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    if (latitude === 0 && longitude === 0) return null;
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+    return { lat: latitude, lon: longitude };
   }
 
   function buildLocationPayload() {
@@ -325,11 +331,9 @@
   async function extractGpsFromFile(file) {
     if (!file || typeof exifr === "undefined") return null;
     try {
-      const gps = await exifr.gps(file);
-      const lat = gps && Number(gps.latitude);
-      const lon = gps && Number(gps.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-      return { lat, lon };
+      const exif = await exifr.parse(file, { gps: true });
+      if (!exif || exif.latitude == null || exif.longitude == null) return null;
+      return normalizeGpsCoords(exif.latitude, exif.longitude);
     } catch (err) {
       console.warn("EXIF GPS niet gelezen uit bestand", err);
       return null;
@@ -367,7 +371,12 @@
 
   async function resolvePhotoGps(photo) {
     if (!photo) return null;
-    if (photo.gps) return photo.gps;
+
+    const inMemory = normalizeGpsCoords(
+      photo.gps && photo.gps.lat,
+      photo.gps && photo.gps.lon
+    );
+    if (inMemory) return inMemory;
 
     const stored = coordinatesFromRecord(photo);
     if (stored) return stored;
@@ -425,8 +434,9 @@
       kenmerk: kenmerkId,
       location: locationId,
     };
-    if (photo.gps) {
-      payload.coordinates = { lat: photo.gps.lat, lon: photo.gps.lon };
+    const gps = normalizeGpsCoords(photo.gps && photo.gps.lat, photo.gps && photo.gps.lon);
+    if (gps) {
+      payload.coordinates = gps;
     }
     return payload;
   }
@@ -877,7 +887,7 @@
         }
       });
 
-      if (photo.gps) {
+      if (photo.gps && normalizeGpsCoords(photo.gps.lat, photo.gps.lon)) {
         markPhotoGpsIndicator(thumb, true);
       } else {
         applyPhotoGpsIndicator(thumb, photo);
