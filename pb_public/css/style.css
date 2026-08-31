@@ -651,6 +651,32 @@ body {
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  transition: border-color var(--transition);
+}
+
+.photo-thumb.photo-has-gps {
+  border-color: var(--success);
+}
+
+.photo-gps-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(13, 17, 23, 0.78);
+  color: var(--success);
+  pointer-events: none;
+}
+
+.photo-gps-badge svg {
+  width: 13px;
+  height: 13px;
 }
 
 .photo-thumb img {
@@ -823,11 +849,18 @@ body {
 }
 
 .detail-photo {
+  position: relative;
   aspect-ratio: 1;
   border-radius: var(--radius-sm);
   overflow: hidden;
   cursor: pointer;
   background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  transition: border-color var(--transition), transform var(--transition);
+}
+
+.detail-photo.photo-has-gps {
+  border-color: var(--success);
 }
 
 .detail-photo img {
