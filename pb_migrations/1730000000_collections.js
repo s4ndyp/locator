@@ -1,89 +1,79 @@
-/// <reference path="../pb_data/types.d.ts" />
 migrate(
-  (db) => {
-    const dao = new Dao(db);
+  (app) => {
+    const locations = new Collection({
+      name: "locations",
+      type: "base",
+      listRule: "",
+      viewRule: "",
+      createRule: "",
+      updateRule: "",
+      deleteRule: "",
+      fields: [
+        {
+          name: "name",
+          type: "text",
+          required: true,
+          presentable: true,
+          min: 1,
+          max: 200,
+        },
+      ],
+      indexes: [],
+    });
 
-  const locations = new Collection({
-    name: "locations",
-    type: "base",
-    listRule: "",
-    viewRule: "",
-    createRule: "",
-    updateRule: "",
-    deleteRule: "",
-    fields: [
-      {
-        id: "fld_loc_name",
-        name: "name",
-        type: "text",
-        required: true,
-        presentable: true,
-        options: { min: 1, max: 200, pattern: "" },
-      },
-    ],
-    indexes: [],
-  });
+    app.save(locations);
 
-  dao.saveCollection(locations);
-
-  const kenmerken = new Collection({
-    name: "kenmerken",
-    type: "base",
-    listRule: "",
-    viewRule: "",
-    createRule: "",
-    updateRule: "",
-    deleteRule: "",
-    fields: [
-      {
-        id: "fld_ken_name",
-        name: "name",
-        type: "text",
-        required: true,
-        presentable: true,
-        options: { min: 1, max: 200, pattern: "" },
-      },
-      {
-        id: "fld_ken_location",
-        name: "location",
-        type: "relation",
-        required: true,
-        options: {
+    const kenmerken = new Collection({
+      name: "kenmerken",
+      type: "base",
+      listRule: "",
+      viewRule: "",
+      createRule: "",
+      updateRule: "",
+      deleteRule: "",
+      fields: [
+        {
+          name: "name",
+          type: "text",
+          required: true,
+          presentable: true,
+          min: 1,
+          max: 200,
+        },
+        {
+          name: "location",
+          type: "relation",
+          required: true,
           collectionId: locations.id,
           cascadeDelete: true,
-          minSelect: null,
           maxSelect: 1,
           displayFields: ["name"],
         },
-      },
-      {
-        id: "fld_ken_sort",
-        name: "sort_order",
-        type: "number",
-        required: false,
-        options: { min: null, max: null, noDecimal: true },
-      },
-    ],
-    indexes: [],
-  });
+        {
+          name: "sort_order",
+          type: "number",
+          required: false,
+          noDecimal: true,
+        },
+      ],
+      indexes: [],
+    });
 
-  dao.saveCollection(kenmerken);
+    app.save(kenmerken);
 
-  const photos = new Collection({
-    name: "photos",
-    type: "base",
-    listRule: "",
-    viewRule: "",
-    createRule: "",
-    updateRule: "",
-    deleteRule: "",
-    fields: [
-      {
-        id: "fld_photo_image",
-        name: "image",
-        type: "file",
-        required: true,
-        options: {
+    const photos = new Collection({
+      name: "photos",
+      type: "base",
+      listRule: "",
+      viewRule: "",
+      createRule: "",
+      updateRule: "",
+      deleteRule: "",
+      fields: [
+        {
+          name: "image",
+          type: "file",
+          required: true,
           maxSelect: 1,
           maxSize: 10485760,
           mimeTypes: [
@@ -96,49 +86,38 @@ migrate(
           ],
           thumbs: ["100x100", "400x400"],
         },
-      },
-      {
-        id: "fld_photo_kenmerk",
-        name: "kenmerk",
-        type: "relation",
-        required: true,
-        options: {
+        {
+          name: "kenmerk",
+          type: "relation",
+          required: true,
           collectionId: kenmerken.id,
           cascadeDelete: true,
-          minSelect: null,
           maxSelect: 1,
           displayFields: ["name"],
         },
-      },
-      {
-        id: "fld_photo_location",
-        name: "location",
-        type: "relation",
-        required: true,
-        options: {
+        {
+          name: "location",
+          type: "relation",
+          required: true,
           collectionId: locations.id,
           cascadeDelete: true,
-          minSelect: null,
           maxSelect: 1,
           displayFields: ["name"],
         },
-      },
-    ],
-    indexes: [],
-  });
+      ],
+      indexes: [],
+    });
 
-  dao.saveCollection(photos);
+    app.save(photos);
   },
-  (db) => {
-    const dao = new Dao(db);
+  (app) => {
+    const photos = app.findCollectionByNameOrId("photos");
+    if (photos) app.delete(photos);
 
-    const photos = dao.findCollectionByNameOrId("photos");
-    if (photos) dao.deleteCollection(photos);
+    const kenmerken = app.findCollectionByNameOrId("kenmerken");
+    if (kenmerken) app.delete(kenmerken);
 
-    const kenmerken = dao.findCollectionByNameOrId("kenmerken");
-    if (kenmerken) dao.deleteCollection(kenmerken);
-
-    const locations = dao.findCollectionByNameOrId("locations");
-    if (locations) dao.deleteCollection(locations);
+    const locations = app.findCollectionByNameOrId("locations");
+    if (locations) app.delete(locations);
   }
 );
