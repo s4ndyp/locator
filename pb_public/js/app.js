@@ -277,6 +277,46 @@
     return "https://www.google.com/maps?q=" + encodeURIComponent(lat + "," + lon);
   }
 
+  function osmEmbedUrl(lat, lon) {
+    const delta = 0.008;
+    const bbox = [
+      lon - delta,
+      lat - delta,
+      lon + delta,
+      lat + delta,
+    ].join(",");
+    return (
+      "https://www.openstreetmap.org/export/embed.html?bbox=" +
+      encodeURIComponent(bbox) +
+      "&layer=mapnik&marker=" +
+      encodeURIComponent(lat + "," + lon)
+    );
+  }
+
+  function buildDetailMap(coords) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "detail-map";
+
+    const iframe = document.createElement("iframe");
+    iframe.src = osmEmbedUrl(coords.lat, coords.lon);
+    iframe.title = "Kaart van locatie";
+    iframe.loading = "lazy";
+    iframe.referrerPolicy = "no-referrer-when-downgrade";
+    iframe.setAttribute("allowfullscreen", "");
+    wrapper.appendChild(iframe);
+
+    const coordsLabel = formatCoordinate(coords.lat) + ", " + formatCoordinate(coords.lon);
+    const link = document.createElement("p");
+    link.className = "detail-coordinates";
+    link.innerHTML =
+      "<a href=\"" + escapeHtml(mapsUrl(coords.lat, coords.lon)) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
+      escapeHtml(coordsLabel) + " · Open in Google Maps" +
+      "</a>";
+    wrapper.appendChild(link);
+
+    return wrapper;
+  }
+
   function resetGpsButton(btn) {
     if (!btn) return;
     btn.disabled = false;
@@ -959,21 +999,11 @@
       els.pageTitle.textContent = location.name;
 
       const coords = coordinatesFromRecord(location);
-      let coordsHtml = "";
-      if (coords) {
-        const coordsLabel = formatCoordinate(coords.lat) + ", " + formatCoordinate(coords.lon);
-        coordsHtml =
-          "<p class=\"detail-coordinates\">" +
-          "<a href=\"" + escapeHtml(mapsUrl(coords.lat, coords.lon)) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
-          escapeHtml(coordsLabel) +
-          "</a></p>";
-      }
 
       const header = document.createElement("div");
       header.className = "detail-header";
       header.innerHTML =
         "<h2>" + escapeHtml(location.name) + "</h2>" +
-        coordsHtml +
         "<p class=\"detail-meta\">" +
         kenmerken.length + " kenmerk" + (kenmerken.length !== 1 ? "en" : "") +
         " · " + photos.length + " foto" + (photos.length !== 1 ? "'s" : "") +
@@ -995,6 +1025,10 @@
       actions.appendChild(deleteBtn);
 
       els.detailContent.appendChild(header);
+
+      if (coords) {
+        els.detailContent.appendChild(buildDetailMap(coords));
+      }
 
       if (kenmerken.length === 0) {
         const empty = document.createElement("p");
