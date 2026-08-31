@@ -328,16 +328,33 @@
     return wrapper;
   }
 
+  function coordsFromExifData(data) {
+    if (!data) return null;
+    const lat = data.latitude ?? data.GPSLatitude ?? data.lat;
+    const lon = data.longitude ?? data.GPSLongitude ?? data.lon;
+    return normalizeGpsCoords(lat, lon);
+  }
+
   async function extractGpsFromFile(file) {
     if (!file || typeof exifr === "undefined") return null;
+
     try {
-      const exif = await exifr.parse(file, { gps: true });
-      if (!exif || exif.latitude == null || exif.longitude == null) return null;
-      return normalizeGpsCoords(exif.latitude, exif.longitude);
+      const gps = await exifr.gps(file);
+      const fromGps = coordsFromExifData(gps);
+      if (fromGps) return fromGps;
     } catch (err) {
-      console.warn("EXIF GPS niet gelezen uit bestand", err);
-      return null;
+      console.warn("exifr.gps mislukt", err);
     }
+
+    try {
+      const parsed = await exifr.parse(file, { gps: true, translateKeys: true });
+      const fromParse = coordsFromExifData(parsed);
+      if (fromParse) return fromParse;
+    } catch (err) {
+      console.warn("exifr.parse mislukt", err);
+    }
+
+    return null;
   }
 
   async function extractGpsFromStoredPhoto(photo) {
@@ -429,16 +446,28 @@
   }
 
   function buildPhotoCreatePayload(photo, kenmerkId, locationId) {
-    const payload = {
+    return {
       image: photo.file,
       kenmerk: kenmerkId,
       location: locationId,
     };
+  }
+
+  async function createPhotoWithGps(photo, kenmerkId, locationId) {
+    const record = await pb.collection("photos").create(
+      buildPhotoCreatePayload(photo, kenmerkId, locationId)
+    );
+
     const gps = normalizeGpsCoords(photo.gps && photo.gps.lat, photo.gps && photo.gps.lon);
     if (gps) {
-      payload.coordinates = gps;
+      try {
+        await pb.collection("photos").update(record.id, { coordinates: gps });
+      } catch (err) {
+        console.warn("Foto-coördinaten opslaan mislukt", record.id, err);
+      }
     }
-    return payload;
+
+    return record;
   }
 
   function sortPhotosByCreated(photoList) {
@@ -803,19 +832,19 @@
 
   function handleFiles(kenmerkName, fileList) {
     const incoming = Array.from(fileList || []);
-    const files = [];
+    const pending = [];
     let skipped = 0;
 
     incoming.forEach((raw) => {
       const file = normalizeImageFile(raw);
       if (file) {
-        files.push(file);
+        pending.push({ raw, file });
       } else {
         skipped++;
       }
     });
 
-    if (!files.length) {
+    if (!pending.length) {
       if (incoming.length) {
         showToast("Geen geldige afbeeldingen geselecteerd (PNG, JPG, WebP, GIF)", "error");
       }
@@ -829,10 +858,10 @@
     if (!state.create.photos[kenmerkName]) state.create.photos[kenmerkName] = [];
 
     Promise.all(
-      files.map(async (file) => {
+      pending.map(async ({ raw, file }) => {
         const id = uniqueId();
         const preview = URL.createObjectURL(file);
-        const gps = await extractGpsFromFile(file);
+        const gps = (await extractGpsFromFile(raw)) || (await extractGpsFromFile(file));
         return { id, file, preview, gps };
       })
     ).then((newPhotos) => {
@@ -926,9 +955,7 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          await pb.collection("photos").create(
-            buildPhotoCreatePayload(photo, kenmerk.id, location.id)
-          );
+          await createPhotoWithGps(photo, kenmerk.id, location.id);
           uploadCount++;
         }
       }
@@ -994,9 +1021,7 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          await pb.collection("photos").create(
-            buildPhotoCreatePayload(photo, kenmerk.id, locationId)
-          );
+          await createPhotoWithGps(photo, kenmerk.id, locationId);
           uploadCount++;
         }
       }
