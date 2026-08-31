@@ -126,9 +126,17 @@
     return err.message || fallback;
   }
 
-  function fileUrl(record, field, thumb) {
+  function fileFieldName(record, field) {
     if (!record || !record[field]) return "";
-    return pb.files.getURL(record, field, thumb ? { thumb } : undefined);
+    const value = record[field];
+    if (Array.isArray(value)) return value[0] || "";
+    return String(value);
+  }
+
+  function fileUrl(record, field, thumb) {
+    const filename = fileFieldName(record, field);
+    if (!filename || !record.id) return "";
+    return pb.files.getURL(record, filename, thumb ? { thumb } : undefined);
   }
 
   function relationId(value) {
@@ -550,12 +558,22 @@
           grid.className = "detail-photo-grid";
 
           kenmerkPhotos.forEach((photo) => {
-            const url = fileUrl(photo, "image", "400x400");
+            const thumbUrl = fileUrl(photo, "image", "100x100");
             const fullUrl = fileUrl(photo, "image");
             const item = document.createElement("div");
             item.className = "detail-photo";
-            item.innerHTML = "<img src=\"" + url + "\" alt=\"\" loading=\"lazy\" />";
-            item.addEventListener("click", () => openLightbox(fullUrl, kenmerk.name));
+            const img = document.createElement("img");
+            img.alt = kenmerk.name;
+            img.loading = "lazy";
+            img.src = thumbUrl || fullUrl;
+            if (thumbUrl && fullUrl && thumbUrl !== fullUrl) {
+              img.addEventListener("error", function onThumbError() {
+                img.removeEventListener("error", onThumbError);
+                img.src = fullUrl;
+              });
+            }
+            item.appendChild(img);
+            item.addEventListener("click", () => openLightbox(fullUrl || thumbUrl, kenmerk.name));
             grid.appendChild(item);
           });
 
