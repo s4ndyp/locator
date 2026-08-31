@@ -9,6 +9,6 @@ services:
     ports:
       - "8090:8090"
     volumes:
+      # Alleen data persistent; pb_public en pb_migrations komen uit de image (COPY).
+      # Volume-mounts op pb_public/pb_migrations overschrijven de image met lege host-dirs.
       - ./pb_data:/pb/pb_data
-      - ./pb_public:/pb/pb_public
-      - ./pb_migrations:/pb/pb_migrations

@@ -1,0 +1,7 @@
+# Optioneel: live editing van frontend/migraties tijdens development.
+# Gebruik: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  pocketbase:
+    volumes:
+      - ./pb_public:/pb/pb_public
+      - ./pb_migrations:/pb/pb_migrations
