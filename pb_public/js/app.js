@@ -65,7 +65,10 @@
     detailLoading: document.getElementById("detail-loading"),
     toast: document.getElementById("toast"),
     lightbox: document.getElementById("lightbox"),
+    lightboxTrack: document.getElementById("lightbox-track"),
     lightboxImg: document.getElementById("lightbox-img"),
+    lightboxPrev: document.querySelector("#lightbox-track [data-slot='prev']"),
+    lightboxNext: document.querySelector("#lightbox-track [data-slot='next']"),
     lightboxCaption: document.getElementById("lightbox-caption"),
   };
 
@@ -1332,6 +1335,10 @@
   let lightboxIndex = 0;
   let lightboxDrag = null;
   let lightboxIgnoreClick = false;
+  let lightboxTrackX = 0;
+  let lightboxAnimating = false;
+  let lightboxSettleDelta = 0;
+  let lightboxSettleId = 0;
 
   function bindLocationCardPress(card, actions) {
     const duration = 500;
@@ -1390,28 +1397,97 @@
     });
   }
 
-  function setLightboxShift(x, dragging) {
-    els.lightboxImg.classList.toggle("is-dragging", !!dragging);
-    els.lightboxImg.style.transform = x ? "translateX(" + Math.round(x) + "px)" : "";
+  function lightboxPhotoAt(offset) {
+    const index = lightboxIndex + offset;
+    if (index < 0 || index >= lightboxPhotos.length) return null;
+    return lightboxPhotos[index];
   }
 
-  function renderLightboxPhoto() {
-    const photo = lightboxPhotos[lightboxIndex];
-    if (!photo) return;
-    els.lightboxImg.src = photo.src;
-    els.lightboxImg.alt = photo.alt || "";
-    if (els.lightboxCaption) {
+  function lightboxSpan() {
+    const gap = parseFloat(getComputedStyle(els.lightboxTrack).getPropertyValue("--lightbox-gap"));
+    return (els.lightbox.clientWidth || window.innerWidth) + (Number.isFinite(gap) ? gap : 20);
+  }
+
+  function setLightboxSlide(img, photo) {
+    if (!img) return;
+    if (!photo || !photo.src) {
+      img.classList.add("is-empty");
+      img.removeAttribute("src");
+      img.alt = "";
+      return;
+    }
+    img.classList.remove("is-empty");
+    if (img.getAttribute("src") !== photo.src) img.src = photo.src;
+    img.alt = photo.alt || "";
+  }
+
+  function renderLightboxSlides() {
+    setLightboxSlide(els.lightboxPrev, lightboxPhotoAt(-1));
+    setLightboxSlide(els.lightboxImg, lightboxPhotoAt(0));
+    setLightboxSlide(els.lightboxNext, lightboxPhotoAt(1));
+    const photo = lightboxPhotoAt(0);
+    if (els.lightboxCaption && photo) {
       const position = lightboxIndex + 1 + " / " + lightboxPhotos.length;
       els.lightboxCaption.textContent = photo.alt ? photo.alt + " · " + position : position;
     }
-    setLightboxShift(0, false);
+  }
+
+  function lightboxMoveDuration(distance) {
+    return Math.round(Math.min(340, Math.max(180, Math.abs(distance) * 0.45)));
+  }
+
+  function setLightboxTrack(x, animate) {
+    const previous = lightboxTrackX;
+    lightboxTrackX = x;
+    if (!animate) {
+      els.lightboxTrack.style.transition = "none";
+    } else {
+      els.lightboxTrack.style.transition =
+        "transform " + lightboxMoveDuration(x - previous) + "ms cubic-bezier(0.22, 1, 0.36, 1)";
+    }
+    els.lightboxTrack.style.transform = "translate3d(" + Math.round(x) + "px, 0, 0)";
+  }
+
+  function finishLightboxSettle(id) {
+    if (id !== lightboxSettleId) return;
+    lightboxSettleId += 1;
+    const delta = lightboxSettleDelta;
+    lightboxSettleDelta = 0;
+    lightboxAnimating = false;
+    if (delta) lightboxIndex += delta;
+    els.lightboxTrack.style.transition = "none";
+    lightboxTrackX = 0;
+    els.lightboxTrack.style.transform = "translate3d(0, 0, 0)";
+    renderLightboxSlides();
+  }
+
+  function settleLightbox(x, delta) {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || Math.abs(x - lightboxTrackX) < 1) {
+      lightboxSettleDelta = delta;
+      lightboxSettleId += 1;
+      finishLightboxSettle(lightboxSettleId);
+      return;
+    }
+    lightboxAnimating = true;
+    lightboxSettleDelta = delta;
+    const id = ++lightboxSettleId;
+    const ms = lightboxMoveDuration(x - lightboxTrackX);
+    setLightboxTrack(x, true);
+    window.setTimeout(() => finishLightboxSettle(id), ms + 40);
+    els.lightboxTrack.addEventListener("transitionend", function onEnd(event) {
+      if (event.target !== els.lightboxTrack || event.propertyName !== "transform") return;
+      els.lightboxTrack.removeEventListener("transitionend", onEnd);
+      finishLightboxSettle(id);
+    });
   }
 
   function stepLightbox(delta) {
+    if (lightboxAnimating || !delta) return false;
     const next = lightboxIndex + delta;
     if (next < 0 || next >= lightboxPhotos.length) return false;
-    lightboxIndex = next;
-    renderLightboxPhoto();
+    const distance = lightboxSpan();
+    settleLightbox(delta > 0 ? -distance : distance, delta);
     return true;
   }
 
@@ -1419,7 +1495,12 @@
     lightboxPhotos = photos || [];
     if (!lightboxPhotos.length) return;
     lightboxIndex = Math.max(0, Math.min(index || 0, lightboxPhotos.length - 1));
-    renderLightboxPhoto();
+    lightboxDrag = null;
+    lightboxAnimating = false;
+    lightboxSettleDelta = 0;
+    lightboxSettleId += 1;
+    renderLightboxSlides();
+    setLightboxTrack(0, false);
     els.lightbox.classList.remove("hidden");
     document.body.style.overflow = "hidden";
   }
@@ -1427,19 +1508,29 @@
   function closeLightbox() {
     lightboxDrag = null;
     lightboxIgnoreClick = false;
-    setLightboxShift(0, false);
+    lightboxAnimating = false;
+    lightboxSettleDelta = 0;
+    lightboxSettleId += 1;
+    setLightboxTrack(0, false);
     els.lightbox.classList.add("hidden");
-    els.lightboxImg.src = "";
-    els.lightboxImg.alt = "";
+    setLightboxSlide(els.lightboxPrev, null);
+    setLightboxSlide(els.lightboxImg, null);
+    setLightboxSlide(els.lightboxNext, null);
     if (els.lightboxCaption) els.lightboxCaption.textContent = "";
     document.body.style.overflow = "";
   }
 
   function onLightboxPointerDown(e) {
-    if (els.lightbox.classList.contains("hidden")) return;
+    if (els.lightbox.classList.contains("hidden") || lightboxAnimating) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (e.target.closest(".lightbox-close")) return;
-    lightboxDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: "" };
+    lightboxDrag = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      t: e.timeStamp,
+      axis: "",
+    };
   }
 
   function onLightboxPointerMove(e) {
@@ -1453,21 +1544,35 @@
     if (lightboxDrag.axis !== "x") return;
     const atStart = lightboxIndex <= 0 && dx > 0;
     const atEnd = lightboxIndex >= lightboxPhotos.length - 1 && dx < 0;
-    setLightboxShift(atStart || atEnd ? dx * 0.35 : dx, true);
+    setLightboxTrack(atStart || atEnd ? dx * 0.32 : dx, false);
   }
 
   function onLightboxPointerUp(e) {
     if (!lightboxDrag || e.pointerId !== lightboxDrag.id) return;
     const dx = e.clientX - lightboxDrag.x;
     const dy = e.clientY - lightboxDrag.y;
-    const horizontal = lightboxDrag.axis === "x" && Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy);
+    const elapsed = Math.max(e.timeStamp - lightboxDrag.t, 16);
+    const horizontal = lightboxDrag.axis === "x";
     lightboxDrag = null;
     if (!horizontal) {
-      setLightboxShift(0, false);
+      setLightboxTrack(0, false);
       return;
     }
     lightboxIgnoreClick = true;
-    if (!stepLightbox(dx < 0 ? 1 : -1)) setLightboxShift(0, false);
+    const span = lightboxSpan();
+    const flicked = Math.abs(dx) > 18 && Math.abs(dx) / elapsed > 0.45 && Math.abs(dx) > Math.abs(dy);
+    const passed = Math.abs(dx) > span * 0.18 && Math.abs(dx) > Math.abs(dy);
+    const goNext = dx < 0 && lightboxIndex < lightboxPhotos.length - 1;
+    const goPrev = dx > 0 && lightboxIndex > 0;
+    if ((flicked || passed) && goNext) {
+      settleLightbox(-span, 1);
+      return;
+    }
+    if ((flicked || passed) && goPrev) {
+      settleLightbox(span, -1);
+      return;
+    }
+    settleLightbox(0, 0);
   }
 
   /* Events */
@@ -1557,8 +1662,9 @@
   els.lightbox.addEventListener("pointermove", onLightboxPointerMove);
   els.lightbox.addEventListener("pointerup", onLightboxPointerUp);
   els.lightbox.addEventListener("pointercancel", () => {
+    if (!lightboxDrag) return;
     lightboxDrag = null;
-    setLightboxShift(0, false);
+    settleLightbox(0, 0);
   });
   document.addEventListener("keydown", (e) => {
     if (els.lightbox.classList.contains("hidden")) return;
