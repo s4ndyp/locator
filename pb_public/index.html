@@ -32,7 +32,7 @@
 
       <main class="app-main">
         <!-- Home -->
-        <section id="view-home" class="view active">
+        <section id="view-home" class="view">
           <div class="home-hero">
             <div class="home-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -148,6 +148,9 @@
             </div>
 
             <button type="submit" class="btn btn-primary btn-block">Volgende: foto's toevoegen</button>
+            <button type="button" id="btn-delete-location" class="btn btn-danger btn-block hidden">
+              Locatie verwijderen
+            </button>
           </form>
         </section>
 
@@ -160,6 +163,9 @@
           </div>
           <p class="step-label">Foto's per kenmerk</p>
           <p class="location-preview-name" id="create-location-name"></p>
+          <button type="button" id="btn-edit-location" class="btn btn-secondary btn-block btn-edit-location hidden">
+            Locatie bewerken
+          </button>
 
           <div id="kenmerk-photo-sections" class="kenmerk-sections"></div>
 
@@ -174,7 +180,7 @@
         </section>
 
         <!-- Locatielijst -->
-        <section id="view-list" class="view">
+        <section id="view-list" class="view active">
           <div id="location-list" class="location-list"></div>
           <div id="list-empty" class="empty-state hidden">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -198,6 +204,12 @@
           </div>
         </section>
       </main>
+
+      <button type="button" id="btn-fab-new-location" class="fab" aria-label="Nieuwe locatie aanmaken">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 4v16M4 12h16" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" />
+        </svg>
+      </button>
 
       <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 

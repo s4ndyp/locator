@@ -238,6 +238,62 @@ body {
   width: 100%;
 }
 
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid rgba(248, 81, 73, 0.45);
+}
+
+.btn-danger:hover {
+  background: rgba(248, 81, 73, 0.12);
+  border-color: var(--danger);
+}
+
+.btn-edit-location {
+  margin: -8px 0 20px;
+}
+
+#btn-delete-location {
+  margin-top: 12px;
+}
+
+.fab {
+  position: fixed;
+  z-index: 90;
+  right: max(16px, calc((100vw - 720px) / 2 + 16px));
+  bottom: calc(16px + var(--safe-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  border: 2px solid var(--success);
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--success);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: background var(--transition), transform 0.1s ease;
+}
+
+.fab:hover {
+  background: rgba(63, 185, 80, 0.16);
+}
+
+.fab:active {
+  transform: scale(0.96);
+}
+
+.fab svg {
+  width: 40px;
+  height: 40px;
+}
+
+#view-list {
+  padding-bottom: 88px;
+}
+
 /* Steps */
 .step-indicator {
   display: flex;
