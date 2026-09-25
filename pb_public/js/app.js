@@ -970,11 +970,11 @@
           "</svg></div>";
 
         bindLocationCardPress(card, {
-          onTap: () => loadLocationForEdit(loc.id, { openPhotos: true }),
-          onLongPress: () => {
+          onTap: () => {
             state.detailLocationId = loc.id;
             showView("detail");
           },
+          onLongPress: () => loadLocationForEdit(loc.id, { openPhotos: true }),
         });
 
         els.locationList.appendChild(card);
