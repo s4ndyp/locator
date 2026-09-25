@@ -82,6 +82,7 @@
   let geolocationPermissionListenerAttached = false;
 
   function showView(name) {
+    if (name === "home") name = "list";
     state.view = name;
     Object.values(views).forEach((v) => v.classList.remove("active"));
     const key =
