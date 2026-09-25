@@ -257,37 +257,57 @@ body {
   margin-top: 12px;
 }
 
-.fab {
+#btn-fab-new-location {
   position: fixed;
-  z-index: 90;
+  z-index: 150;
   right: max(16px, calc((100vw - 720px) / 2 + 16px));
   bottom: calc(16px + var(--safe-bottom));
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 68px;
-  height: 68px;
+  flex: 0 0 64px;
+  align-self: flex-end;
+  box-sizing: border-box;
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  max-width: 64px;
+  max-height: 64px;
+  margin: 0;
   padding: 0;
-  border: 2px solid var(--success);
+  border: 3px solid #3fb950;
   border-radius: 50%;
-  background: var(--bg-secondary);
-  color: var(--success);
-  box-shadow: var(--shadow);
+  background: #161b22;
+  color: #3fb950;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  transition: background var(--transition), transform 0.1s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 0;
 }
 
-.fab:hover {
-  background: rgba(63, 185, 80, 0.16);
+#btn-fab-new-location.hidden {
+  display: none !important;
 }
 
-.fab:active {
+body:not(:has(#view-list.active)) #btn-fab-new-location {
+  display: none !important;
+}
+
+#btn-fab-new-location svg {
+  display: block;
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+
+#btn-fab-new-location:hover {
+  background: #1c2b22;
+}
+
+#btn-fab-new-location:active {
   transform: scale(0.96);
-}
-
-.fab svg {
-  width: 40px;
-  height: 40px;
 }
 
 #view-list {
