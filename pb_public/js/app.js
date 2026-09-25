@@ -66,6 +66,7 @@
     toast: document.getElementById("toast"),
     lightbox: document.getElementById("lightbox"),
     lightboxImg: document.getElementById("lightbox-img"),
+    lightboxCaption: document.getElementById("lightbox-caption"),
   };
 
   const titles = {
@@ -1158,8 +1159,12 @@
           "<polyline points=\"9 18 15 12 9 6\"/>" +
           "</svg></div>";
 
-        card.addEventListener("click", () => {
-          loadLocationForEdit(loc.id, { openPhotos: true });
+        bindLocationCardPress(card, {
+          onTap: () => loadLocationForEdit(loc.id, { openPhotos: true }),
+          onLongPress: () => {
+            state.detailLocationId = loc.id;
+            showView("detail");
+          },
         });
 
         els.locationList.appendChild(card);
@@ -1229,6 +1234,8 @@
         els.detailContent.appendChild(empty);
       }
 
+      const gallery = [];
+
       for (const kenmerk of kenmerken) {
         const kenmerkPhotos = sortPhotosByCreated(
           photos.filter((p) => relationId(p.kenmerk) === kenmerk.id)
@@ -1271,7 +1278,12 @@
               });
             }
             item.appendChild(img);
-            item.addEventListener("click", () => openLightbox(fullUrl || thumbUrl, kenmerk.name));
+            const src = fullUrl || thumbUrl;
+            if (src) {
+              const index = gallery.length;
+              gallery.push({ src: src, alt: kenmerk.name });
+              item.addEventListener("click", () => openLightbox(gallery, index));
+            }
             applyPhotoGpsIndicator(item, photo);
             grid.appendChild(item);
           });
@@ -1316,17 +1328,146 @@
     }
   }
 
-  function openLightbox(src, alt) {
-    els.lightboxImg.src = src;
-    els.lightboxImg.alt = alt || "";
+  let lightboxPhotos = [];
+  let lightboxIndex = 0;
+  let lightboxDrag = null;
+  let lightboxIgnoreClick = false;
+
+  function bindLocationCardPress(card, actions) {
+    const duration = 500;
+    let timer = null;
+    let startX = 0;
+    let startY = 0;
+    let longFired = false;
+    let ignoreClickUntil = 0;
+
+    function clearTimer() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      card.classList.remove("is-holding");
+    }
+
+    card.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      longFired = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      card.classList.add("is-holding");
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        longFired = true;
+        ignoreClickUntil = Date.now() + 800;
+        card.classList.remove("is-holding");
+        actions.onLongPress();
+      }, duration);
+    });
+
+    card.addEventListener("pointermove", (e) => {
+      if (!timer) return;
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 12) clearTimer();
+    });
+
+    card.addEventListener("pointerup", clearTimer);
+    card.addEventListener("pointercancel", clearTimer);
+    card.addEventListener("pointerleave", () => {
+      if (timer) clearTimer();
+    });
+
+    card.addEventListener("click", (e) => {
+      if (longFired || Date.now() < ignoreClickUntil) {
+        e.preventDefault();
+        longFired = false;
+        return;
+      }
+      actions.onTap();
+    });
+
+    card.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+    });
+  }
+
+  function setLightboxShift(x, dragging) {
+    els.lightboxImg.classList.toggle("is-dragging", !!dragging);
+    els.lightboxImg.style.transform = x ? "translateX(" + Math.round(x) + "px)" : "";
+  }
+
+  function renderLightboxPhoto() {
+    const photo = lightboxPhotos[lightboxIndex];
+    if (!photo) return;
+    els.lightboxImg.src = photo.src;
+    els.lightboxImg.alt = photo.alt || "";
+    if (els.lightboxCaption) {
+      const position = lightboxIndex + 1 + " / " + lightboxPhotos.length;
+      els.lightboxCaption.textContent = photo.alt ? photo.alt + " · " + position : position;
+    }
+    setLightboxShift(0, false);
+  }
+
+  function stepLightbox(delta) {
+    const next = lightboxIndex + delta;
+    if (next < 0 || next >= lightboxPhotos.length) return false;
+    lightboxIndex = next;
+    renderLightboxPhoto();
+    return true;
+  }
+
+  function openLightbox(photos, index) {
+    lightboxPhotos = photos || [];
+    if (!lightboxPhotos.length) return;
+    lightboxIndex = Math.max(0, Math.min(index || 0, lightboxPhotos.length - 1));
+    renderLightboxPhoto();
     els.lightbox.classList.remove("hidden");
     document.body.style.overflow = "hidden";
   }
 
   function closeLightbox() {
+    lightboxDrag = null;
+    lightboxIgnoreClick = false;
+    setLightboxShift(0, false);
     els.lightbox.classList.add("hidden");
     els.lightboxImg.src = "";
+    els.lightboxImg.alt = "";
+    if (els.lightboxCaption) els.lightboxCaption.textContent = "";
     document.body.style.overflow = "";
+  }
+
+  function onLightboxPointerDown(e) {
+    if (els.lightbox.classList.contains("hidden")) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest(".lightbox-close")) return;
+    lightboxDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, axis: "" };
+  }
+
+  function onLightboxPointerMove(e) {
+    if (!lightboxDrag || e.pointerId !== lightboxDrag.id) return;
+    const dx = e.clientX - lightboxDrag.x;
+    const dy = e.clientY - lightboxDrag.y;
+    if (!lightboxDrag.axis) {
+      if (Math.hypot(dx, dy) < 8) return;
+      lightboxDrag.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+    }
+    if (lightboxDrag.axis !== "x") return;
+    const atStart = lightboxIndex <= 0 && dx > 0;
+    const atEnd = lightboxIndex >= lightboxPhotos.length - 1 && dx < 0;
+    setLightboxShift(atStart || atEnd ? dx * 0.35 : dx, true);
+  }
+
+  function onLightboxPointerUp(e) {
+    if (!lightboxDrag || e.pointerId !== lightboxDrag.id) return;
+    const dx = e.clientX - lightboxDrag.x;
+    const dy = e.clientY - lightboxDrag.y;
+    const horizontal = lightboxDrag.axis === "x" && Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy);
+    lightboxDrag = null;
+    if (!horizontal) {
+      setLightboxShift(0, false);
+      return;
+    }
+    lightboxIgnoreClick = true;
+    if (!stepLightbox(dx < 0 ? 1 : -1)) setLightboxShift(0, false);
   }
 
   /* Events */
@@ -1406,10 +1547,24 @@
 
   els.lightbox.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
   els.lightbox.addEventListener("click", (e) => {
+    if (lightboxIgnoreClick) {
+      lightboxIgnoreClick = false;
+      return;
+    }
     if (e.target === els.lightbox) closeLightbox();
   });
+  els.lightbox.addEventListener("pointerdown", onLightboxPointerDown);
+  els.lightbox.addEventListener("pointermove", onLightboxPointerMove);
+  els.lightbox.addEventListener("pointerup", onLightboxPointerUp);
+  els.lightbox.addEventListener("pointercancel", () => {
+    lightboxDrag = null;
+    setLightboxShift(0, false);
+  });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !els.lightbox.classList.contains("hidden")) closeLightbox();
+    if (els.lightbox.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeLightbox();
+    if (e.key === "ArrowLeft") stepLightbox(-1);
+    if (e.key === "ArrowRight") stepLightbox(1);
   });
 
   showView("list");
