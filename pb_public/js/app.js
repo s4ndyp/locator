@@ -8,7 +8,7 @@
   const exifGpsCache = new Map();
 
   const state = {
-    view: "home",
+    view: "list",
     create: {
       name: "",
       coordinates: null,
@@ -19,6 +19,7 @@
       removedPhotoIds: [],
     },
     editingLocationId: null,
+    editEntry: null,
     detailLocationId: null,
     geolocationPermission: "unknown",
   };
@@ -35,7 +36,10 @@
     pageTitle: document.getElementById("page-title"),
     btnBack: document.getElementById("btn-back"),
     btnNewLocation: document.getElementById("btn-new-location"),
+    btnFabNewLocation: document.getElementById("btn-fab-new-location"),
     btnLocationList: document.getElementById("btn-location-list"),
+    btnEditLocation: document.getElementById("btn-edit-location"),
+    btnDeleteLocation: document.getElementById("btn-delete-location"),
     btnEmptyNew: document.getElementById("btn-empty-new"),
     formLocationInfo: document.getElementById("form-location-info"),
     locationName: document.getElementById("location-name"),
@@ -88,7 +92,8 @@
       (isEditing() && (name === "createStep1" ? titles.editStep1 : name === "createStep2" ? titles.editStep2 : null)) ||
       titles[name] ||
       "Locatie Foto's";
-    els.btnBack.classList.toggle("hidden", name === "home");
+    els.btnBack.classList.toggle("hidden", name === "home" || name === "list");
+    els.btnFabNewLocation.classList.toggle("hidden", name !== "list");
 
     if (name === "list") loadLocationList();
     if (name === "detail" && state.detailLocationId) loadLocationDetail(state.detailLocationId);
@@ -106,17 +111,22 @@
         ? "Volgende: foto's bewerken"
         : "Volgende: foto's toevoegen";
     }
+    els.btnDeleteLocation.classList.toggle("hidden", !isEditing());
   }
 
   function updateCreateStep2Labels() {
     els.btnSaveLocation.textContent = isEditing() ? "Wijzigingen opslaan" : "Locatie opslaan";
     els.btnCancelCreate.textContent = isEditing() ? "Annuleren" : "Annuleren";
+    els.btnEditLocation.classList.toggle("hidden", !isEditing());
   }
 
   function goBack() {
     switch (state.view) {
       case "createStep1":
-        if (isEditing()) {
+        if (isEditing() && state.editEntry === "photos") {
+          buildKenmerkPhotoSections();
+          showView("createStep2");
+        } else if (isEditing()) {
           const locationId = state.editingLocationId;
           photosCleanup();
           resetCreate();
@@ -124,20 +134,23 @@
           showView("detail");
         } else {
           resetCreate();
-          showView("home");
+          showView("list");
         }
         break;
       case "createStep2":
-        showView("createStep1");
-        break;
-      case "list":
-        showView("home");
+        if (isEditing() && state.editEntry === "photos") {
+          photosCleanup();
+          resetCreate();
+          showView("list");
+        } else {
+          showView("createStep1");
+        }
         break;
       case "detail":
         showView("list");
         break;
       default:
-        showView("home");
+        showView("list");
     }
   }
 
@@ -152,6 +165,7 @@
       removedPhotoIds: [],
     };
     state.editingLocationId = null;
+    state.editEntry = null;
     els.locationName.value = "";
     setCoordinateInputs(null);
     els.kenmerkInput.value = "";
@@ -1043,7 +1057,8 @@
     }
   }
 
-  async function loadLocationForEdit(locationId) {
+  async function loadLocationForEdit(locationId, options) {
+    const openPhotos = !!(options && options.openPhotos);
     try {
       const location = await pb.collection("locations").getOne(locationId);
       const kenmerken = await pb.collection("kenmerken").getFullList({
@@ -1056,6 +1071,7 @@
 
       resetCreate();
       state.editingLocationId = locationId;
+      state.editEntry = openPhotos ? "photos" : "detail";
       state.create.name = location.name;
       state.create.coordinates = coordinatesFromRecord(location);
       state.create.kenmerken = kenmerken.map((k) => k.name);
@@ -1076,7 +1092,12 @@
       els.locationName.value = location.name;
       setCoordinateInputs(state.create.coordinates);
       renderKenmerkChips();
-      showView("createStep1");
+      if (openPhotos) {
+        buildKenmerkPhotoSections();
+        showView("createStep2");
+      } else {
+        showView("createStep1");
+      }
     } catch (err) {
       console.error(err);
       showToast("Laden mislukt: " + apiErrorMessage(err, "onbekende fout"), "error");
@@ -1137,8 +1158,7 @@
           "</svg></div>";
 
         card.addEventListener("click", () => {
-          state.detailLocationId = loc.id;
-          showView("detail");
+          loadLocationForEdit(loc.id, { openPhotos: true });
         });
 
         els.locationList.appendChild(card);
@@ -1284,6 +1304,8 @@
 
     try {
       await pb.collection("locations").delete(locationId);
+      photosCleanup();
+      resetCreate();
       showToast("Locatie verwijderd", "success");
       state.detailLocationId = null;
       showView("list");
@@ -1311,6 +1333,15 @@
   els.btnNewLocation.addEventListener("click", () => {
     resetCreate();
     showView("createStep1");
+  });
+  els.btnFabNewLocation.addEventListener("click", () => {
+    resetCreate();
+    showView("createStep1");
+  });
+  els.btnEditLocation.addEventListener("click", () => showView("createStep1"));
+  els.btnDeleteLocation.addEventListener("click", () => {
+    if (!state.editingLocationId) return;
+    deleteLocation(state.editingLocationId, state.create.name || els.locationName.value.trim());
   });
   els.btnLocationList.addEventListener("click", () => showView("list"));
   els.btnEmptyNew.addEventListener("click", () => {
@@ -1356,14 +1387,19 @@
   els.btnCancelCreate.addEventListener("click", () => {
     if (isEditing()) {
       const locationId = state.editingLocationId;
+      const entry = state.editEntry;
       photosCleanup();
       resetCreate();
-      state.detailLocationId = locationId;
-      showView("detail");
+      if (entry === "photos") {
+        showView("list");
+      } else {
+        state.detailLocationId = locationId;
+        showView("detail");
+      }
     } else {
       photosCleanup();
       resetCreate();
-      showView("home");
+      showView("list");
     }
   });
 
@@ -1375,5 +1411,5 @@
     if (e.key === "Escape" && !els.lightbox.classList.contains("hidden")) closeLightbox();
   });
 
-  showView("home");
+  showView("list");
 })();
