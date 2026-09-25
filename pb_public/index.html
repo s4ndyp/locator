@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/style.css?v=20260925d" />
+    <link rel="stylesheet" href="css/style.css?v=20260925e" />
   </head>
   <body>
     <div id="app">
@@ -91,7 +91,7 @@
 
             <div class="form-group">
               <label>Coördinaten</label>
-              <p class="form-hint">Optioneel. Gebruik GPS om je huidige locatie in te vullen.</p>
+              <p class="form-hint">Optioneel. Haal je huidige locatie op met GPS.</p>
               <div id="coords-permission" class="coords-permission hidden" role="status" aria-live="polite">
                 <div class="coords-permission-body">
                   <p class="coords-permission-title">Locatietoegang</p>
@@ -101,33 +101,15 @@
                   Locatie toestaan
                 </button>
               </div>
-              <div class="coords-input-row">
-                <input
-                  type="text"
-                  id="location-latitude"
-                  placeholder="Breedtegraad"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  aria-label="Breedtegraad"
-                />
-                <input
-                  type="text"
-                  id="location-longitude"
-                  placeholder="Lengtegraad"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  aria-label="Lengtegraad"
-                />
-                <button type="button" id="btn-use-gps" class="btn btn-secondary btn-gps" title="Gebruik GPS-locatie">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-                    <circle cx="12" cy="12" r="8" />
-                  </svg>
-                  <span>GPS</span>
-                </button>
-              </div>
-              <p id="coords-error" class="form-error hidden"></p>
+              <button type="button" id="btn-use-gps" class="btn btn-secondary btn-gps" title="Gebruik GPS-locatie">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+                  <circle cx="12" cy="12" r="8" />
+                </svg>
+                <span>GPS</span>
+              </button>
+              <p id="coords-status" class="coords-status hidden"></p>
             </div>
 
             <div class="form-group">
@@ -238,7 +220,6 @@
     </button>
 
     <script src="https://unpkg.com/pocketbase@0.28.0/dist/pocketbase.umd.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.min.js"></script>
-    <script src="js/app.js?v=20260925d"></script>
+    <script src="js/app.js?v=20260925e"></script>
   </body>
 </html>

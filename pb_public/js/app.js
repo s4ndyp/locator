@@ -5,8 +5,6 @@
   "use strict";
 
   const pb = new PocketBase(window.location.origin);
-  const exifGpsCache = new Map();
-
   const state = {
     view: "list",
     create: {
@@ -43,13 +41,11 @@
     btnEmptyNew: document.getElementById("btn-empty-new"),
     formLocationInfo: document.getElementById("form-location-info"),
     locationName: document.getElementById("location-name"),
-    locationLatitude: document.getElementById("location-latitude"),
-    locationLongitude: document.getElementById("location-longitude"),
     btnUseGps: document.getElementById("btn-use-gps"),
     coordsPermission: document.getElementById("coords-permission"),
     coordsPermissionText: document.getElementById("coords-permission-text"),
     btnRequestLocation: document.getElementById("btn-request-location"),
-    coordsError: document.getElementById("coords-error"),
+    coordsStatus: document.getElementById("coords-status"),
     kenmerkInput: document.getElementById("kenmerk-input"),
     btnAddKenmerk: document.getElementById("btn-add-kenmerk"),
     kenmerkList: document.getElementById("kenmerk-list"),
@@ -172,11 +168,10 @@
     state.editingLocationId = null;
     state.editEntry = null;
     els.locationName.value = "";
-    setCoordinateInputs(null);
+    showCoordinateStatus(null);
     els.kenmerkInput.value = "";
     els.kenmerkList.innerHTML = "";
     els.kenmerkError.classList.add("hidden");
-    els.coordsError.classList.add("hidden");
     els.kenmerkPhotoSections.innerHTML = "";
     updateCreateStep1Labels();
     updateCreateStep2Labels();
@@ -232,42 +227,16 @@
     return num.toFixed(6);
   }
 
-  function parseCoordinateInput(value) {
-    const trimmed = String(value || "").trim().replace(",", ".");
-    if (!trimmed) return null;
-    const num = Number(trimmed);
-    return Number.isFinite(num) ? num : NaN;
-  }
-
-  function readCoordinatesFromForm() {
-    return {
-      lat: parseCoordinateInput(els.locationLatitude.value),
-      lon: parseCoordinateInput(els.locationLongitude.value),
-    };
-  }
-
-  function setCoordinateInputs(coordinates) {
-    const lat = coordinates && coordinates.lat !== undefined ? coordinates.lat : null;
-    const lon = coordinates && coordinates.lon !== undefined ? coordinates.lon : null;
-    els.locationLatitude.value = formatCoordinate(lat);
-    els.locationLongitude.value = formatCoordinate(lon);
-  }
-
-  function validateCoordinates(lat, lon) {
-    const hasLat = lat !== null;
-    const hasLon = lon !== null;
-
-    if (!hasLat && !hasLon) return null;
-    if (hasLat !== hasLon) {
-      return "Vul zowel breedtegraad als lengtegraad in, of laat beide leeg.";
+  function showCoordinateStatus(coordinates) {
+    if (!els.coordsStatus) return;
+    if (!coordinates) {
+      els.coordsStatus.textContent = "";
+      els.coordsStatus.classList.add("hidden");
+      return;
     }
-    if (Number.isNaN(lat) || lat < -90 || lat > 90) {
-      return "Breedtegraad moet tussen -90 en 90 liggen.";
-    }
-    if (Number.isNaN(lon) || lon < -180 || lon > 180) {
-      return "Lengtegraad moet tussen -180 en 180 liggen.";
-    }
-    return null;
+    els.coordsStatus.textContent =
+      formatCoordinate(coordinates.lat) + ", " + formatCoordinate(coordinates.lon);
+    els.coordsStatus.classList.remove("hidden");
   }
 
   function coordinatesFromRecord(record) {
@@ -289,14 +258,6 @@
     const coords = state.create.coordinates;
     payload.coordinates = coords ? { lat: coords.lat, lon: coords.lon } : null;
     return payload;
-  }
-
-  function syncCoordinatesFromForm() {
-    const { lat, lon } = readCoordinatesFromForm();
-    const error = validateCoordinates(lat, lon);
-    if (error) return error;
-    state.create.coordinates = lat !== null && lon !== null ? { lat, lon } : null;
-    return null;
   }
 
   function mapsUrl(lat, lon) {
@@ -347,146 +308,12 @@
     return wrapper;
   }
 
-  function coordsFromExifData(data) {
-    if (!data) return null;
-    const lat = data.latitude ?? data.GPSLatitude ?? data.lat;
-    const lon = data.longitude ?? data.GPSLongitude ?? data.lon;
-    return normalizeGpsCoords(lat, lon);
-  }
-
-  async function extractGpsFromFile(file) {
-    if (!file || typeof exifr === "undefined") return null;
-
-    try {
-      const gps = await exifr.gps(file);
-      const fromGps = coordsFromExifData(gps);
-      if (fromGps) return fromGps;
-    } catch (err) {
-      console.warn("exifr.gps mislukt", err);
-    }
-
-    try {
-      const parsed = await exifr.parse(file, { gps: true, translateKeys: true });
-      const fromParse = coordsFromExifData(parsed);
-      if (fromParse) return fromParse;
-    } catch (err) {
-      console.warn("exifr.parse mislukt", err);
-    }
-
-    return null;
-  }
-
-  async function extractGpsFromStoredPhoto(photo) {
-    if (!photo || !photo.id) return null;
-    if (exifGpsCache.has(photo.id)) return exifGpsCache.get(photo.id);
-
-    const stored = coordinatesFromRecord(photo);
-    if (stored) {
-      exifGpsCache.set(photo.id, stored);
-      return stored;
-    }
-
-    const imageUrl = fileUrl(photo, "image");
-    if (!imageUrl) {
-      exifGpsCache.set(photo.id, null);
-      return null;
-    }
-
-    try {
-      const response = await fetch(imageUrl);
-      if (!response.ok) throw new Error("fetch failed");
-      const coords = await extractGpsFromFile(await response.blob());
-      exifGpsCache.set(photo.id, coords);
-      return coords;
-    } catch (err) {
-      console.warn("EXIF GPS niet beschikbaar voor foto", photo.id, err);
-      exifGpsCache.set(photo.id, null);
-      return null;
-    }
-  }
-
-  async function resolvePhotoGps(photo) {
-    if (!photo) return null;
-
-    const inMemory = normalizeGpsCoords(
-      photo.gps && photo.gps.lat,
-      photo.gps && photo.gps.lon
-    );
-    if (inMemory) return inMemory;
-
-    const stored = coordinatesFromRecord(photo);
-    if (stored) return stored;
-
-    if (photo.file) return extractGpsFromFile(photo.file);
-
-    if (photo.recordId || photo.id) {
-      return extractGpsFromStoredPhoto({
-        id: photo.recordId || photo.id,
-        coordinates: photo.coordinates,
-        image: photo.image,
-      });
-    }
-
-    return null;
-  }
-
-  async function findFirstPhotoGps(photoList) {
-    for (const photo of photoList) {
-      const gps = await resolvePhotoGps(photo);
-      if (gps) return gps;
-    }
-    return null;
-  }
-
-  function markPhotoGpsIndicator(container, hasGps) {
-    container.classList.toggle("photo-has-gps", hasGps);
-    let badge = container.querySelector(".photo-gps-badge");
-    if (hasGps) {
-      if (!badge) {
-        badge = document.createElement("span");
-        badge.className = "photo-gps-badge";
-        badge.setAttribute("aria-label", "Locatie beschikbaar");
-        badge.innerHTML =
-          "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">" +
-          "<path d=\"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z\"/>" +
-          "<circle cx=\"12\" cy=\"10\" r=\"3\"/>" +
-          "</svg>";
-        container.appendChild(badge);
-      }
-    } else if (badge) {
-      badge.remove();
-    }
-  }
-
-  async function applyPhotoGpsIndicator(container, photo) {
-    const gps = await resolvePhotoGps(photo);
-    markPhotoGpsIndicator(container, !!gps);
-    return gps;
-  }
-
-  function buildPhotoCreatePayload(photo, kenmerkId, locationId) {
-    return {
+  async function createPhoto(photo, kenmerkId, locationId) {
+    return pb.collection("photos").create({
       image: photo.file,
       kenmerk: kenmerkId,
       location: locationId,
-    };
-  }
-
-  async function createPhotoWithGps(photo, kenmerkId, locationId) {
-    const record = await pb.collection("photos").create(
-      buildPhotoCreatePayload(photo, kenmerkId, locationId)
-    );
-
-    const gps = normalizeGpsCoords(photo.gps && photo.gps.lat, photo.gps && photo.gps.lon);
-    if (gps) {
-      try {
-        await pb.collection("photos").update(record.id, { coordinates: gps });
-      } catch (err) {
-        console.warn("Foto-coördinaten opslaan mislukt", record.id, err);
-      }
-    }
-
-    return record;
+    });
   }
 
   function sortPhotosByCreated(photoList) {
@@ -513,8 +340,7 @@
       lon: position.coords.longitude,
     };
     state.create.coordinates = coords;
-    setCoordinateInputs(coords);
-    els.coordsError.classList.add("hidden");
+    showCoordinateStatus(coords);
     state.geolocationPermission = "granted";
     updateLocationPermissionUI();
     showToast("GPS-coördinaten toegevoegd", "success");
@@ -876,24 +702,14 @@
 
     if (!state.create.photos[kenmerkName]) state.create.photos[kenmerkName] = [];
 
-    Promise.all(
-      pending.map(async ({ raw, file }) => {
-        const id = uniqueId();
-        const preview = URL.createObjectURL(file);
-        const gps = (await extractGpsFromFile(raw)) || (await extractGpsFromFile(file));
-        return { id, file, preview, gps };
-      })
-    ).then((newPhotos) => {
-      state.create.photos[kenmerkName].push(...newPhotos);
-      renderPhotoGrid(kenmerkName);
-      const withGps = newPhotos.filter((photo) => photo.gps).length;
-      if (withGps) {
-        showToast(
-          withGps + " foto" + (withGps !== 1 ? "'s" : "") + " met locatiegegevens toegevoegd",
-          "success"
-        );
-      }
+    pending.forEach(({ file }) => {
+      state.create.photos[kenmerkName].push({
+        id: uniqueId(),
+        file: file,
+        preview: URL.createObjectURL(file),
+      });
     });
+    renderPhotoGrid(kenmerkName);
   }
 
   function renderPhotoGrid(kenmerkName) {
@@ -935,12 +751,6 @@
         }
       });
 
-      if (photo.gps && normalizeGpsCoords(photo.gps.lat, photo.gps.lon)) {
-        markPhotoGpsIndicator(thumb, true);
-      } else {
-        applyPhotoGpsIndicator(thumb, photo);
-      }
-
       grid.appendChild(thumb);
     });
   }
@@ -974,7 +784,7 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          await createPhotoWithGps(photo, kenmerk.id, location.id);
+          await createPhoto(photo, kenmerk.id, location.id);
           uploadCount++;
         }
       }
@@ -1040,7 +850,7 @@
         const photos = state.create.photos[kenmerk.name] || [];
         for (const photo of photos) {
           if (!photo.file) continue;
-          await createPhotoWithGps(photo, kenmerk.id, locationId);
+          await createPhoto(photo, kenmerk.id, locationId);
           uploadCount++;
         }
       }
@@ -1088,14 +898,11 @@
             id: p.id,
             recordId: p.id,
             preview: fileUrl(p, "image", "400x400"),
-            gps: coordinatesFromRecord(p),
-            coordinates: p.coordinates,
-            image: p.image,
           }));
       });
 
       els.locationName.value = location.name;
-      setCoordinateInputs(state.create.coordinates);
+      showCoordinateStatus(state.create.coordinates);
       renderKenmerkChips();
       if (openPhotos) {
         buildKenmerkPhotoSections();
@@ -1251,17 +1058,6 @@
           " <span>" + kenmerkPhotos.length + "</span></h3>";
 
         if (kenmerkPhotos.length > 0) {
-          const photoGps = await findFirstPhotoGps(kenmerkPhotos);
-          if (photoGps) {
-            block.appendChild(
-              buildDetailMap(photoGps, {
-                compact: true,
-                title: "Kaart van fotolocatie voor " + kenmerk.name,
-                linkSuffix: " · Fotolocatie · Open in Google Maps",
-              })
-            );
-          }
-
           const grid = document.createElement("div");
           grid.className = "detail-photo-grid";
 
@@ -1287,7 +1083,6 @@
               gallery.push({ src: src, alt: kenmerk.name });
               item.addEventListener("click", () => openLightbox(gallery, index));
             }
-            applyPhotoGpsIndicator(item, photo);
             grid.appendChild(item);
           });
 
@@ -1614,13 +1409,6 @@
       els.locationName.focus();
       return;
     }
-    const coordError = syncCoordinatesFromForm();
-    if (coordError) {
-      els.coordsError.textContent = coordError;
-      els.coordsError.classList.remove("hidden");
-      return;
-    }
-    els.coordsError.classList.add("hidden");
     if (state.create.kenmerken.length === 0) {
       els.kenmerkError.classList.remove("hidden");
       return;

@@ -442,48 +442,14 @@ body:not(:has(#view-list.active)) #btn-fab-new-location {
   align-self: stretch;
 }
 
-.coords-input-row {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.coords-input-row input {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 14px;
-  font-family: inherit;
-  font-size: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  transition: border-color var(--transition), box-shadow var(--transition);
-}
-
-.coords-input-row input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-muted);
-}
-
-.coords-input-row input::placeholder {
-  color: var(--text-muted);
-}
-
 .btn-gps {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 14px;
-  min-width: 72px;
+  align-self: flex-start;
 }
 
-.btn-gps svg {
-  width: 18px;
-  height: 18px;
+.coords-status {
+  margin: 10px 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
 }
 
 .detail-map {
@@ -499,14 +465,6 @@ body:not(:has(#view-list.active)) #btn-fab-new-location {
   width: 100%;
   height: 220px;
   border: 0;
-}
-
-.detail-map-compact iframe {
-  height: 160px;
-}
-
-.detail-kenmerk .detail-map {
-  margin: 0 0 12px;
 }
 
 .detail-coordinates {
@@ -728,31 +686,6 @@ body:not(:has(#view-list.active)) #btn-fab-new-location {
   overflow: hidden;
   background: var(--bg-tertiary);
   border: 2px solid transparent;
-  transition: border-color var(--transition);
-}
-
-.photo-thumb.photo-has-gps {
-  border-color: var(--success);
-}
-
-.photo-gps-badge {
-  position: absolute;
-  left: 4px;
-  bottom: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(13, 17, 23, 0.78);
-  color: var(--success);
-  pointer-events: none;
-}
-
-.photo-gps-badge svg {
-  width: 13px;
-  height: 13px;
 }
 
 .photo-thumb img {
@@ -939,11 +872,7 @@ body:not(:has(#view-list.active)) #btn-fab-new-location {
   cursor: pointer;
   background: var(--bg-tertiary);
   border: 2px solid transparent;
-  transition: border-color var(--transition), transform var(--transition);
-}
-
-.detail-photo.photo-has-gps {
-  border-color: var(--success);
+  transition: transform var(--transition);
 }
 
 .detail-photo img {
