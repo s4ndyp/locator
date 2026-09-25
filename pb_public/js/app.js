@@ -265,7 +265,7 @@
   }
 
   function osmEmbedUrl(lat, lon) {
-    const delta = 0.008;
+    const delta = 0.001;
     const bbox = [
       lon - delta,
       lat - delta,
