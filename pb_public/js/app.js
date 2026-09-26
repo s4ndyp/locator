@@ -55,8 +55,11 @@
     btnSaveLocation: document.getElementById("btn-save-location"),
     btnCancelCreate: document.getElementById("btn-cancel-create"),
     locationList: document.getElementById("location-list"),
+    listSearch: document.getElementById("list-search"),
     listEmpty: document.getElementById("list-empty"),
+    listNoResults: document.getElementById("list-no-results"),
     listLoading: document.getElementById("list-loading"),
+    appHeader: document.querySelector(".app-header"),
     detailContent: document.getElementById("detail-content"),
     detailLoading: document.getElementById("detail-loading"),
     toast: document.getElementById("toast"),
@@ -95,6 +98,8 @@
       "Locatie Foto's";
     els.btnBack.classList.toggle("hidden", name === "home" || name === "list");
     els.btnFabNewLocation.classList.toggle("hidden", name !== "list");
+    els.appHeader.classList.toggle("app-header--list", name === "list");
+    els.listSearch.classList.toggle("hidden", name !== "list");
 
     if (name === "list") loadLocationList();
     if (name === "detail" && state.detailLocationId) loadLocationDetail(state.detailLocationId);
@@ -924,10 +929,27 @@
     });
   }
 
+  function applyListFilter() {
+    const query = els.listSearch.value.trim().toLowerCase();
+    const cards = els.locationList.querySelectorAll(".location-card");
+    let visibleCount = 0;
+
+    cards.forEach((card) => {
+      const name = card.dataset.locationName || "";
+      const match = !query || name.includes(query);
+      card.classList.toggle("hidden", !match);
+      if (match) visibleCount += 1;
+    });
+
+    const hasCards = cards.length > 0;
+    els.listNoResults.classList.toggle("hidden", !hasCards || visibleCount > 0);
+  }
+
   /* Locatielijst */
   async function loadLocationList() {
     els.listLoading.classList.remove("hidden");
     els.listEmpty.classList.add("hidden");
+    els.listNoResults.classList.add("hidden");
     els.locationList.innerHTML = "";
 
     try {
@@ -953,6 +975,7 @@
         const card = document.createElement("button");
         card.type = "button";
         card.className = "location-card";
+        card.dataset.locationName = loc.name.toLowerCase();
         card.innerHTML =
           "<div class=\"location-card-icon\">" +
           "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">" +
@@ -979,6 +1002,8 @@
 
         els.locationList.appendChild(card);
       }
+
+      applyListFilter();
     } catch (err) {
       console.error(err);
       els.listLoading.classList.add("hidden");
@@ -1386,6 +1411,7 @@
     deleteLocation(state.editingLocationId, state.create.name || els.locationName.value.trim());
   });
   els.btnLocationList.addEventListener("click", () => showView("list"));
+  els.listSearch.addEventListener("input", applyListFilter);
   els.btnEmptyNew.addEventListener("click", () => {
     resetCreate();
     showView("createStep1");

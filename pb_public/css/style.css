@@ -73,6 +73,39 @@ body {
   font-size: 1.125rem;
   font-weight: 600;
   letter-spacing: -0.02em;
+  min-width: 0;
+}
+
+.app-header--list .app-title {
+  flex: 0 0 auto;
+}
+
+.list-search {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.list-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.list-search::placeholder {
+  color: var(--text-muted);
+}
+
+.list-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
 }
 
 .btn-icon {
