@@ -2,7 +2,7 @@
  * Service worker voor PWA-installatie en offline shell van statische assets.
  * PocketBase API-verkeer blijft altijd via het netwerk.
  */
-const CACHE_VERSION = "20260926e";
+const CACHE_VERSION = "20260926f";
 const CACHE_NAME = "locatie-fotos-" + CACHE_VERSION;
 
 const PRECACHE_URLS = [
