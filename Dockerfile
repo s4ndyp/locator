@@ -23,6 +23,9 @@ COPY pb_migrations/ /pb/pb_migrations/
 # Fail the build if static files or migrations were not copied
 RUN test -f /pb/pb_public/index.html \
     && test -f /pb/pb_public/js/app.js \
+    && test -f /pb/pb_public/manifest.webmanifest \
+    && test -f /pb/pb_public/sw.js \
+    && test -f /pb/pb_public/icons/icon-512.png \
     && ls /pb/pb_migrations/*.js >/dev/null 2>&1
 
 WORKDIR /pb
