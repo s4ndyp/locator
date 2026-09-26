@@ -1,6 +1,6 @@
 {
-  "name": "Locatie Foto's",
-  "short_name": "Locaties",
+  "name": "Locator",
+  "short_name": "Locator",
   "description": "Organiseer locatie foto's per kenmerk. Maak locaties aan, voeg kenmerken toe en upload foto's.",
   "lang": "nl",
   "start_url": "/",
